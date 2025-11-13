@@ -690,26 +690,28 @@ async function processStory() {
         
         statusDiv.innerHTML = '<div class="status-message info">✓ AI processing complete! Saving to database...</div>';
         
-        // Insert dark stories first
+        // Insert dark stories if any were generated
         const darkStoryIds = [];
-        for (const darkStory of darkStories) {
-            const { data, error } = await supabase.from('stories').insert([{
-                title: darkStory.title,
-                organization: 'Context Research',
-                location: 'Global',
-                summary: darkStory.summary,
-                impact_metrics: darkStory.keyFacts,
-                category: 'dark',
-                source_url: darkStory.sourceUrls[0],
-                source_urls: darkStory.sourceUrls,
-                utm_campaign: 'positive-impact'
-            }]).select();
-            
-            if (error) throw error;
-            if (data && data[0]) darkStoryIds.push(data[0].id);
+        if (darkStories && darkStories.length > 0) {
+            for (const darkStory of darkStories) {
+                const { data, error } = await supabase.from('stories').insert([{
+                    title: darkStory.title,
+                    organization: 'Context Research',
+                    location: 'Global',
+                    summary: darkStory.summary,
+                    impact_metrics: darkStory.keyFacts,
+                    category: 'dark',
+                    source_url: darkStory.sourceUrls[0],
+                    source_urls: darkStory.sourceUrls,
+                    utm_campaign: 'positive-impact'
+                }]).select();
+                
+                if (error) throw error;
+                if (data && data[0]) darkStoryIds.push(data[0].id);
+            }
         }
         
-        // Insert primary story with links to dark stories
+        // Insert primary story
         const { error: primaryError } = await supabase.from('stories').insert([{
             title: primaryStory.title,
             organization: primaryStory.organization,
@@ -725,28 +727,12 @@ async function processStory() {
         
         if (primaryError) throw primaryError;
         
+        const darkCount = darkStories ? darkStories.length : 0;
         statusDiv.innerHTML = `
             <div class="status-message success">
-                ✓ Success! Added 1 ${primaryStory.category} story and ${darkStories.length} context stories.<br>
-                <small style="margin-top: 10px; display: block;">
-                    The ${primaryStory.category} story is now linked to its contextual "Dark" stories.
-                </small>
+                ✓ Success! Added 1 ${primaryStory.category} story${darkCount > 0 ? ` and ${darkCount} context stories` : ''}.
             </div>
         `;
-        
-        urlInput.value = '';
-        notesInput.value = '';
-        await loadStories();
-        await loadAnalytics();
-        
-    } catch (error) {
-        statusDiv.innerHTML = `<div class="status-message error">Error: ${error.message}</div>`;
-    } finally {
-        processBtn.disabled = false;
-        processBtn.textContent = '🤖 Process with AI';
-    }
-}
-
 function editStoryFromDashboard(storyId) {
     const story = allStories.find(s => s.id === storyId);
     if (story) {
