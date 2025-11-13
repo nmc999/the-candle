@@ -63,42 +63,42 @@ function renderHomePage() {
             <p class="tagline">Illuminating positive impact across the globe</p>
             
             <div class="candle-visualization">
-    <div class="dark-zone" data-section="dark" style="pointer-events: auto;">
-        <span class="dark-label" style="pointer-events: none;">The Dark</span>
-    </div>
-    
-    <div class="light-zone" data-section="light" style="pointer-events: auto;">
-        <span class="light-label" style="pointer-events: none;">The Light</span>
-    </div>
-    
-    <div class="wax-zone" data-section="wax" style="pointer-events: auto; width: 120px; height: 280px;">
-        <svg width="120" height="280" viewBox="0 0 120 280" style="pointer-events: none;">
-            <defs>
-                <linearGradient id="waxGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" style="stop-color:#f4e4c1;stop-opacity:1" />
-                    <stop offset="50%" style="stop-color:#f9f3e3;stop-opacity:1" />
-                    <stop offset="100%" style="stop-color:#f4e4c1;stop-opacity:1" />
-                </linearGradient>
-            </defs>
-            <path class="candle-body" d="M 30 40 L 90 40 L 85 270 L 35 270 Z" fill="url(#waxGradient)" stroke="#d4a574" stroke-width="2"/>
-            <ellipse cx="60" cy="40" rx="30" ry="8" fill="#f4e4c1"/>
-        </svg>
-    </div>
-    
-    <div class="wick-zone" data-section="wick" style="pointer-events: auto; width: 120px; height: 50px;">
-        <svg width="120" height="50" viewBox="0 0 120 50" style="pointer-events: none;">
-            <rect x="55" y="0" width="10" height="45" fill="#2a2a2a" rx="2"/>
-        </svg>
-    </div>
-    
-    <div class="flame-zone" data-section="flame" style="pointer-events: auto; width: 120px; height: 100px;">
-        <svg width="120" height="100" viewBox="0 0 120 100" class="flame" style="pointer-events: none;">
-            <ellipse cx="60" cy="50" rx="35" ry="50" fill="#ff6b35" opacity="0.9"/>
-            <ellipse cx="60" cy="55" rx="22" ry="35" fill="#ffa500"/>
-            <ellipse cx="60" cy="60" rx="12" ry="22" fill="#ffeb3b"/>
-        </svg>
-    </div>
-</div>
+                <div class="dark-zone" data-section="dark" style="pointer-events: auto;">
+                    <span class="dark-label" style="pointer-events: none;">The Dark</span>
+                </div>
+                
+                <div class="light-zone" data-section="light" style="pointer-events: auto;">
+                    <span class="light-label" style="pointer-events: none;">The Light</span>
+                </div>
+                
+                <div class="wax-zone" data-section="wax" style="pointer-events: auto; width: 120px; height: 280px;">
+                    <svg width="120" height="280" viewBox="0 0 120 280" style="pointer-events: none;">
+                        <defs>
+                            <linearGradient id="waxGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" style="stop-color:#f4e4c1;stop-opacity:1" />
+                                <stop offset="50%" style="stop-color:#f9f3e3;stop-opacity:1" />
+                                <stop offset="100%" style="stop-color:#f4e4c1;stop-opacity:1" />
+                            </linearGradient>
+                        </defs>
+                        <path class="candle-body" d="M 30 40 L 90 40 L 85 270 L 35 270 Z" fill="url(#waxGradient)" stroke="#d4a574" stroke-width="2"/>
+                        <ellipse cx="60" cy="40" rx="30" ry="8" fill="#f4e4c1"/>
+                    </svg>
+                </div>
+                
+                <div class="wick-zone" data-section="wick" style="pointer-events: auto; width: 120px; height: 50px;">
+                    <svg width="120" height="50" viewBox="0 0 120 50" style="pointer-events: none;">
+                        <rect x="55" y="0" width="10" height="45" fill="#2a2a2a" rx="2"/>
+                    </svg>
+                </div>
+                
+                <div class="flame-zone" data-section="flame" style="pointer-events: auto; width: 120px; height: 100px;">
+                    <svg width="120" height="100" viewBox="0 0 120 100" class="flame" style="pointer-events: none;">
+                        <ellipse cx="60" cy="50" rx="35" ry="50" fill="#ff6b35" opacity="0.9"/>
+                        <ellipse cx="60" cy="55" rx="22" ry="35" fill="#ffa500"/>
+                        <ellipse cx="60" cy="60" rx="12" ry="22" fill="#ffeb3b"/>
+                    </svg>
+                </div>
+            </div>
             
             <div id="tooltip" class="hover-tooltip">
                 <h4 id="tooltip-title"></h4>
@@ -310,40 +310,18 @@ async function processStory() {
     statusDiv.innerHTML = '<div class="status-message info">Analyzing content with AI...</div>';
     
     try {
-        const response = await fetch("https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                model: "claude-sonnet-4-20250514",
-                max_tokens: 4000,
-                messages: [{
-                    role: "user",
-                    content: `Analyze this URL: ${url}
-
-Create a 300-word summary focusing on positive impact. Extract: organization name, location, 3-5 impact metrics.
-Categorize as: "flame" (exciting/inspirational), "light" (wider impact), or "dark" (problems addressed).
-
-Notes: ${notes || 'None'}
-
-Respond ONLY with JSON:
-{
-  "title": "Compelling title",
-  "organization": "Org name",
-  "location": "Location",
-  "summary": "300 word summary",
-  "impactMetrics": ["Metric 1", "Metric 2", "Metric 3"],
-  "category": "flame/light/dark",
-  "sourceUrl": "${url}"
-}
-
-NO markdown, NO backticks, ONLY JSON.`
-                }]
-            })
+        const response = await fetch('/.netlify/functions/process-story', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url, notes })
         });
-        
-        const data = await response.json();
-        let text = data.content[0].text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-        const storyData = JSON.parse(text);
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Processing failed');
+        }
+
+        const storyData = await response.json();
         
         const { error } = await supabase.from('stories').insert([{
             title: storyData.title,
