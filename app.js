@@ -10,13 +10,31 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 let currentPage = 'home';
 let isAuthenticated = false;
 let stories = { flame: [], light: [], dark: [] };
+let allStories = [];
 let editingStory = null;
+let analytics = {
+    totalClicks: 0,
+    subscriberCount: 0,
+    storyCounts: { flame: 0, light: 0, dark: 0 }
+};
 
 // Initialize app
 async function init() {
+    checkRoute();
     await loadStories();
+    if (currentPage === 'dashboard' && isAuthenticated) {
+        await loadAnalytics();
+    }
     renderApp();
     setupEventListeners();
+}
+
+// Check URL route
+function checkRoute() {
+    const path = window.location.pathname;
+    if (path === '/dashboard' || path === '/dashboard.html') {
+        currentPage = 'dashboard';
+    }
 }
 
 // Load stories from Supabase
@@ -29,6 +47,7 @@ async function loadStories() {
         
         if (error) throw error;
         
+        allStories = data;
         stories = { flame: [], light: [], dark: [] };
         data.forEach(story => {
             if (stories[story.category]) {
@@ -37,6 +56,36 @@ async function loadStories() {
         });
     } catch (error) {
         console.error('Error loading stories:', error);
+    }
+}
+
+// Load analytics data
+async function loadAnalytics() {
+    try {
+        // Get subscriber count
+        const { count: subCount } = await supabase
+            .from('email_subscribers')
+            .select('*', { count: 'exact', head: true })
+            .eq('is_active', true);
+        
+        analytics.subscriberCount = subCount || 0;
+
+        // Get story counts
+        analytics.storyCounts = {
+            flame: stories.flame.length,
+            light: stories.light.length,
+            dark: stories.dark.length
+        };
+
+        // Get total clicks
+        const { data: clickData } = await supabase
+            .from('stories')
+            .select('click_count');
+        
+        analytics.totalClicks = clickData?.reduce((sum, s) => sum + (s.click_count || 0), 0) || 0;
+
+    } catch (error) {
+        console.error('Error loading analytics:', error);
     }
 }
 
@@ -54,17 +103,39 @@ function generateUTMLink(url, storyTitle) {
     }
 }
 
+// Track click
+async function trackClick(storyId, url) {
+    try {
+        await fetch('/.netlify/functions/track-click', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                storyId,
+                referrer: document.referrer,
+                utmSource: 'the-candle',
+                utmMedium: 'referral',
+                utmCampaign: 'positive-impact'
+            })
+        });
+    } catch (error) {
+        console.error('Error tracking click:', error);
+    }
+    
+    // Open link
+    window.open(url, '_blank');
+}
+
 // Render the app
 function renderApp() {
     const app = document.getElementById('app');
     
     if (currentPage === 'home') {
         app.innerHTML = renderHomePage();
-    } else if (currentPage === 'admin') {
+    } else if (currentPage === 'dashboard') {
         if (!isAuthenticated) {
             app.innerHTML = renderPasswordModal();
         } else {
-            app.innerHTML = renderAdminPage();
+            app.innerHTML = renderDashboard();
         }
     } else if (['flame', 'light', 'dark', 'wax', 'wick'].includes(currentPage)) {
         app.innerHTML = renderSectionPage(currentPage);
@@ -158,85 +229,11 @@ function renderSectionPage(section) {
     const config = sectionConfig[section];
     
     if (section === 'wax') {
-        return `
-            <div class="section-page">
-                <div class="section-content">
-                    <a class="back-button" data-action="home">← Back to Home</a>
-                    <div class="section-header">
-                        <span style="font-size: 2rem;">${config.icon}</span>
-                        <h1>${config.title}</h1>
-                    </div>
-                    <p class="section-description">${config.description}</p>
-                    <div class="org-grid">
-                        <div class="org-card">
-                            <div class="org-logo">🏥</div>
-                            <h3>Doctors Without Borders</h3>
-                            <p>Medical humanitarian aid worldwide</p>
-                            <a href="https://www.doctorswithoutborders.org/" target="_blank" class="org-link">Visit Website</a>
-                        </div>
-                        <div class="org-card">
-                            <div class="org-logo">🌍</div>
-                            <h3>UNICEF</h3>
-                            <p>Supporting children's rights globally</p>
-                            <a href="https://www.unicef.org/" target="_blank" class="org-link">Visit Website</a>
-                        </div>
-                        <div class="org-card">
-                            <div class="org-logo">🌊</div>
-                            <h3>Ocean Conservancy</h3>
-                            <p>Protecting ocean ecosystems</p>
-                            <a href="https://oceanconservancy.org/" target="_blank" class="org-link">Visit Website</a>
-                        </div>
-                        <div class="org-card">
-                            <div class="org-logo">🍃</div>
-                            <h3>World Wildlife Fund</h3>
-                            <p>Conservation of nature and wildlife</p>
-                            <a href="https://www.worldwildlife.org/" target="_blank" class="org-link">Visit Website</a>
-                        </div>
-                        <div class="org-card">
-                            <div class="org-logo">💧</div>
-                            <h3>charity: water</h3>
-                            <p>Bringing clean water to developing nations</p>
-                            <a href="https://www.charitywater.org/" target="_blank" class="org-link">Visit Website</a>
-                        </div>
-                        <div class="org-card">
-                            <div class="org-logo">📚</div>
-                            <h3>Room to Read</h3>
-                            <p>Global literacy and gender equality in education</p>
-                            <a href="https://www.roomtoread.org/" target="_blank" class="org-link">Visit Website</a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
+        return renderWaxPage(config);
     }
     
     if (section === 'wick') {
-        return `
-            <div class="section-page">
-                <div class="section-content">
-                    <a class="back-button" data-action="home">← Back to Home</a>
-                    <div class="section-header">
-                        <span style="font-size: 2rem;">${config.icon}</span>
-                        <h1>${config.title}</h1>
-                    </div>
-                    <p class="section-description">${config.description}</p>
-                    <div class="story-card">
-                        <h3>Our Story</h3>
-                        <p class="story-summary">
-                            The Candle was founded on a simple belief: the world needs more light. While traditional news media gravitates toward crisis and conflict, countless positive initiatives go unreported. Organizations across the globe are solving problems, improving lives, and creating lasting change—but their stories remain in the shadows.
-                            <br><br>
-                            We created The Candle to illuminate these stories. Using intelligent technology to discover and curate positive impact narratives, we bring attention to the work that matters. Our mission is not to ignore the darkness, but to show the candles being lit within it.
-                        </p>
-                    </div>
-                    <div class="story-card">
-                        <h3>Admin Access</h3>
-                        <p class="story-summary">
-                            <a class="back-button" data-action="admin" style="color: #d4a017; cursor: pointer;">→ Go to Admin Panel</a>
-                        </p>
-                    </div>
-                </div>
-            </div>
-        `;
+        return renderWickPage(config);
     }
     
     const sectionStories = stories[section] || [];
@@ -252,18 +249,21 @@ function renderSectionPage(section) {
                 <p class="section-description">${config.description}</p>
                 ${sectionStories.length === 0 ? 
                     '<div class="story-card"><p>No stories yet. Check back soon!</p></div>' :
-                    sectionStories.map(story => renderStoryCard(story)).join('')
+                    sectionStories.map(story => renderStoryCard(story, section)).join('')
                 }
             </div>
         </div>
     `;
 }
 
-function renderStoryCard(story) {
-    const utmLink = generateUTMLink(story.source_url, story.title);
-    const editButton = isAuthenticated ? 
-        `<button onclick="editStory(${story.id})" style="margin-left: 15px; padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Edit Story</button>` 
-        : '';
+function renderStoryCard(story, section) {
+    const sourceUrls = story.source_urls || [story.source_url];
+    const relatedDarkIds = story.related_dark_story_ids || [];
+    
+    // Get related dark stories
+    const relatedDarkStories = relatedDarkIds
+        .map(id => allStories.find(s => s.id === id))
+        .filter(s => s);
     
     return `
         <div class="story-card">
@@ -272,24 +272,120 @@ function renderStoryCard(story) {
                 <strong>${story.organization}</strong> • ${story.location}
             </div>
             <p class="story-summary">${story.summary}</p>
+            
             <div class="impact-metrics">
                 <h4>Key Impact Metrics:</h4>
                 <ul>
                     ${story.impact_metrics.map(metric => `<li>${metric}</li>`).join('')}
                 </ul>
             </div>
-            ${story.context_sources && story.context_sources.length > 0 ? `
-                <div class="impact-metrics" style="margin-top: 20px;">
-                    <h4>Context & Background:</h4>
-                    <p style="color: #666; font-size: 0.9rem; margin-bottom: 10px;">Understanding the challenges this initiative addresses</p>
-                    <ul>
-                        ${story.context_sources.map(ctx => `<li>${ctx}</li>`).join('')}
-                    </ul>
+            
+            <div style="margin-top: 20px;">
+                <h4 style="color: #333; margin-bottom: 10px;">Sources:</h4>
+                ${sourceUrls.map((url, idx) => {
+                    const utmLink = generateUTMLink(url, story.title);
+                    return `<div style="margin-bottom: 8px;">
+                        <a href="#" onclick="trackClick(${story.id}, '${utmLink}'); return false;" class="source-link">
+                            Source ${idx + 1} →
+                        </a>
+                    </div>`;
+                }).join('')}
+            </div>
+            
+            ${(section === 'flame' || section === 'light') && relatedDarkStories.length > 0 ? `
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #eee;">
+                    <h4 style="color: #333; margin-bottom: 15px;">📖 Understanding the Challenge</h4>
+                    <p style="color: #666; font-size: 0.9rem; margin-bottom: 15px;">
+                        To fully appreciate this initiative, explore the context:
+                    </p>
+                    ${relatedDarkStories.map(darkStory => `
+                        <div style="background: #f9f9f9; padding: 15px; border-radius: 6px; margin-bottom: 10px;">
+                            <a href="#" onclick="navigateToStory('dark', ${darkStory.id}); return false;" 
+                               style="color: #555; text-decoration: none; font-weight: 600; display: block; margin-bottom: 5px;">
+                                ${darkStory.title} →
+                            </a>
+                            <p style="color: #777; font-size: 0.85rem; margin: 0;">
+                                ${darkStory.summary.substring(0, 150)}...
+                            </p>
+                        </div>
+                    `).join('')}
                 </div>
             ` : ''}
-            <div style="margin-top: 20px;">
-                <a href="${utmLink}" target="_blank" class="source-link">Read Source →</a>
-                ${editButton}
+        </div>
+    `;
+}
+
+function renderWaxPage(config) {
+    return `
+        <div class="section-page">
+            <div class="section-content">
+                <a class="back-button" data-action="home">← Back to Home</a>
+                <div class="section-header">
+                    <span style="font-size: 2rem;">${config.icon}</span>
+                    <h1>${config.title}</h1>
+                </div>
+                <p class="section-description">${config.description}</p>
+                <div class="org-grid">
+                    <div class="org-card">
+                        <div class="org-logo">🏥</div>
+                        <h3>Doctors Without Borders</h3>
+                        <p>Medical humanitarian aid worldwide</p>
+                        <a href="https://www.doctorswithoutborders.org/" target="_blank" class="org-link">Visit Website</a>
+                    </div>
+                    <div class="org-card">
+                        <div class="org-logo">🌍</div>
+                        <h3>UNICEF</h3>
+                        <p>Supporting children's rights globally</p>
+                        <a href="https://www.unicef.org/" target="_blank" class="org-link">Visit Website</a>
+                    </div>
+                    <div class="org-card">
+                        <div class="org-logo">🌊</div>
+                        <h3>Ocean Conservancy</h3>
+                        <p>Protecting ocean ecosystems</p>
+                        <a href="https://oceanconservancy.org/" target="_blank" class="org-link">Visit Website</a>
+                    </div>
+                    <div class="org-card">
+                        <div class="org-logo">🍃</div>
+                        <h3>World Wildlife Fund</h3>
+                        <p>Conservation of nature and wildlife</p>
+                        <a href="https://www.worldwildlife.org/" target="_blank" class="org-link">Visit Website</a>
+                    </div>
+                    <div class="org-card">
+                        <div class="org-logo">💧</div>
+                        <h3>charity: water</h3>
+                        <p>Bringing clean water to developing nations</p>
+                        <a href="https://www.charitywater.org/" target="_blank" class="org-link">Visit Website</a>
+                    </div>
+                    <div class="org-card">
+                        <div class="org-logo">📚</div>
+                        <h3>Room to Read</h3>
+                        <p>Global literacy and gender equality in education</p>
+                        <a href="https://www.roomtoread.org/" target="_blank" class="org-link">Visit Website</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderWickPage(config) {
+    return `
+        <div class="section-page">
+            <div class="section-content">
+                <a class="back-button" data-action="home">← Back to Home</a>
+                <div class="section-header">
+                    <span style="font-size: 2rem;">${config.icon}</span>
+                    <h1>${config.title}</h1>
+                </div>
+                <p class="section-description">${config.description}</p>
+                <div class="story-card">
+                    <h3>Our Story</h3>
+                    <p class="story-summary">
+                        The Candle was founded on a simple belief: the world needs more light. While traditional news media gravitates toward crisis and conflict, countless positive initiatives go unreported. Organizations across the globe are solving problems, improving lives, and creating lasting change—but their stories remain in the shadows.
+                        <br><br>
+                        We created The Candle to illuminate these stories. Using intelligent technology to discover and curate positive impact narratives, we bring attention to the work that matters. Our mission is not to ignore the darkness, but to show the candles being lit within it.
+                    </p>
+                </div>
             </div>
         </div>
     `;
@@ -299,7 +395,8 @@ function renderPasswordModal() {
     return `
         <div class="password-modal">
             <div class="password-modal-content">
-                <h2>Admin Access</h2>
+                <h2>Dashboard Access</h2>
+                <p style="color: #666; margin-bottom: 20px;">Administrator login required</p>
                 <div class="form-group">
                     <label>Password</label>
                     <input type="password" id="password-input" placeholder="Enter admin password">
@@ -313,69 +410,195 @@ function renderPasswordModal() {
     `;
 }
 
-function renderAdminPage() {
-    const isEditing = editingStory !== null;
-    const story = isEditing ? editingStory : {};
+function renderDashboard() {
+    if (editingStory) {
+        return renderEditStory();
+    }
     
     return `
-        <div class="admin-page">
-            <div class="section-content">
-                <a class="back-button" data-action="home">← Back to Home</a>
-                <div class="admin-form">
-                    <h2>${isEditing ? 'Edit Story' : 'Add New Story'}</h2>
-                    
-                    ${isEditing ? `
-                        <div class="form-group">
-                            <label>Title</label>
-                            <input type="text" id="title-input" value="${story.title || ''}" />
-                        </div>
-                        <div class="form-group">
-                            <label>Organization</label>
-                            <input type="text" id="org-input" value="${story.organization || ''}" />
-                        </div>
-                        <div class="form-group">
-                            <label>Location</label>
-                            <input type="text" id="location-input" value="${story.location || ''}" />
-                        </div>
-                        <div class="form-group">
-                            <label>Summary</label>
-                            <textarea id="summary-input" rows="8">${story.summary || ''}</textarea>
-                        </div>
-                        <div class="form-group">
-                            <label>Impact Metrics (one per line)</label>
-                            <textarea id="metrics-input" rows="5">${(story.impact_metrics || []).join('\n')}</textarea>
-                        </div>
-                        <div class="form-group">
-                            <label>Category</label>
-                            <select id="category-input">
-                                <option value="flame" ${story.category === 'flame' ? 'selected' : ''}>Flame</option>
-                                <option value="light" ${story.category === 'light' ? 'selected' : ''}>Light</option>
-                                <option value="dark" ${story.category === 'dark' ? 'selected' : ''}>Dark</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Source URL</label>
-                            <input type="url" id="source-input" value="${story.source_url || ''}" />
-                        </div>
-                        <button class="btn" onclick="saveEditedStory()">Save Changes</button>
-                        <button class="btn" onclick="cancelEdit()" style="background: #6c757d; margin-left: 10px;">Cancel</button>
-                    ` : `
-                        <div class="form-group">
-                            <label>URL</label>
-                            <input type="url" id="url-input" placeholder="https://example.com/positive-impact-story">
-                        </div>
-                        <div class="form-group">
-                            <label>Notes (Optional)</label>
-                            <textarea id="notes-input" placeholder="Any additional context..."></textarea>
-                        </div>
-                        <button class="btn" id="process-btn" onclick="processStory()">Process & Add Story</button>
-                    `}
-                    
-                    <div id="status-message"></div>
+        <div class="dashboard-page">
+            <div class="dashboard-header">
+                <h1>🕯️ The Candle Dashboard</h1>
+                <button onclick="logout()" class="btn" style="background: #6c757d;">Logout</button>
+            </div>
+            
+            <!-- Quick Stats -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number">${analytics.storyCounts.flame + analytics.storyCounts.light + analytics.storyCounts.dark}</div>
+                    <div class="stat-label">Total Stories</div>
                 </div>
+                <div class="stat-card">
+                    <div class="stat-number">${analytics.totalClicks}</div>
+                    <div class="stat-label">Total Clicks</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${analytics.subscriberCount}</div>
+                    <div class="stat-label">Email Subscribers</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${analytics.storyCounts.flame}/${analytics.storyCounts.light}/${analytics.storyCounts.dark}</div>
+                    <div class="stat-label">Flame/Light/Dark</div>
+                </div>
+            </div>
+            
+            <!-- Tabs -->
+            <div class="dashboard-tabs">
+                <button class="tab-btn active" data-tab="add">➕ Add Story</button>
+                <button class="tab-btn" data-tab="manage">📚 Manage Stories</button>
+                <button class="tab-btn" data-tab="subscribers">📧 Subscribers</button>
+                <button class="tab-btn" data-tab="analytics">📊 Analytics</button>
+            </div>
+            
+            <!-- Tab Content -->
+            <div id="tab-content">
+                ${renderAddStoryTab()}
             </div>
         </div>
     `;
+}
+
+function renderAddStoryTab() {
+    return `
+        <div class="tab-panel">
+            <h2>Add New Story</h2>
+            <div class="form-group">
+                <label>URL of Positive Initiative</label>
+                <input type="url" id="url-input" placeholder="https://example.com/positive-impact-story">
+            </div>
+            <div class="form-group">
+                <label>Notes (Optional)</label>
+                <textarea id="notes-input" rows="3" placeholder="Any additional context for the AI..."></textarea>
+            </div>
+            <button class="btn" id="process-btn" onclick="processStory()">🤖 Process with AI</button>
+            <div id="status-message" style="margin-top: 20px;"></div>
+        </div>
+    `;
+}
+
+function renderManageStoriesTab() {
+    return `
+        <div class="tab-panel">
+            <h2>All Stories</h2>
+            <div class="story-list">
+                ${allStories.map(story => `
+                    <div class="story-item">
+                        <div class="story-item-header">
+                            <h3>${story.title}</h3>
+                            <span class="badge badge-${story.category}">${story.category}</span>
+                        </div>
+                        <div class="story-item-meta">
+                            ${story.organization} • ${story.location} • ${story.click_count || 0} clicks
+                        </div>
+                        <div class="story-item-actions">
+                            <button onclick="editStoryFromDashboard(${story.id})" class="btn-small">Edit</button>
+                            <button onclick="deleteStory(${story.id})" class="btn-small btn-danger">Delete</button>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+}
+
+function renderSubscribersTab() {
+    return `
+        <div class="tab-panel">
+            <h2>Email Subscribers (${analytics.subscriberCount})</h2>
+            <button onclick="exportSubscribers()" class="btn" style="margin-bottom: 20px;">📥 Export to CSV</button>
+            <div id="subscribers-list">
+                <p style="color: #666;">Loading subscribers...</p>
+            </div>
+        </div>
+    `;
+}
+
+function renderAnalyticsTab() {
+    return `
+        <div class="tab-panel">
+            <h2>Story Performance</h2>
+            <div class="analytics-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Story Title</th>
+                            <th>Category</th>
+                            <th>Clicks</th>
+                            <th>Published</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${allStories
+                            .sort((a, b) => (b.click_count || 0) - (a.click_count || 0))
+                            .map(story => `
+                                <tr>
+                                    <td>${story.title}</td>
+                                    <td><span class="badge badge-${story.category}">${story.category}</span></td>
+                                    <td><strong>${story.click_count || 0}</strong></td>
+                                    <td>${new Date(story.created_at).toLocaleDateString()}</td>
+                                </tr>
+                            `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
+function renderEditStory() {
+    const story = editingStory;
+    const sourceUrls = story.source_urls || [story.source_url];
+    
+    return `
+        <div class="tab-panel">
+            <h2>Edit Story</h2>
+            <div class="form-group">
+                <label>Title</label>
+                <input type="text" id="title-input" value="${story.title || ''}" />
+            </div>
+            <div class="form-group">
+                <label>Organization</label>
+                <input type="text" id="org-input" value="${story.organization || ''}" />
+            </div>
+            <div class="form-group">
+                <label>Location</label>
+                <input type="text" id="location-input" value="${story.location || ''}" />
+            </div>
+            <div class="form-group">
+                <label>Summary</label>
+                <textarea id="summary-input" rows="8">${story.summary || ''}</textarea>
+            </div>
+            <div class="form-group">
+                <label>Impact Metrics (one per line)</label>
+                <textarea id="metrics-input" rows="5">${(story.impact_metrics || []).join('\n')}</textarea>
+            </div>
+            <div class="form-group">
+                <label>Category</label>
+                <select id="category-input">
+                    <option value="flame" ${story.category === 'flame' ? 'selected' : ''}>Flame</option>
+                    <option value="light" ${story.category === 'light' ? 'selected' : ''}>Light</option>
+                    <option value="dark" ${story.category === 'dark' ? 'selected' : ''}>Dark</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Source URLs (one per line)</label>
+                <textarea id="sources-input" rows="3">${sourceUrls.join('\n')}</textarea>
+            </div>
+            <button class="btn" onclick="saveEditedStory()">Save Changes</button>
+            <button class="btn" onclick="cancelEdit()" style="background: #6c757d; margin-left: 10px;">Cancel</button>
+            <div id="status-message" style="margin-top: 20px;"></div>
+        </div>
+    `;
+}
+
+// Navigation functions
+function navigateToStory(section, storyId) {
+    currentPage = section;
+    renderApp();
+    setTimeout(() => {
+        const element = document.querySelector(`[data-story-id="${storyId}"]`);
+        if (element) element.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
 }
 
 function checkPassword() {
@@ -384,10 +607,16 @@ function checkPassword() {
     
     if (input.value === ADMIN_PASSWORD) {
         isAuthenticated = true;
-        renderApp();
+        loadAnalytics().then(() => renderApp());
     } else {
         error.classList.remove('hidden');
     }
+}
+
+function logout() {
+    isAuthenticated = false;
+    currentPage = 'home';
+    window.location.href = '/';
 }
 
 async function subscribeEmail() {
@@ -406,7 +635,7 @@ async function subscribeEmail() {
             .insert([{ email }]);
         
         if (error) {
-            if (error.code === '23505') { // Unique constraint violation
+            if (error.code === '23505') {
                 statusDiv.innerHTML = '<span style="color: #ffd700;">You\'re already subscribed!</span>';
             } else {
                 throw error;
@@ -418,65 +647,6 @@ async function subscribeEmail() {
     } catch (error) {
         console.error('Subscription error:', error);
         statusDiv.innerHTML = '<span style="color: #ff6b6b;">Error subscribing. Please try again.</span>';
-    }
-}
-
-function editStory(storyId) {
-    // Find the story in our stories object
-    let foundStory = null;
-    for (const category in stories) {
-        const story = stories[category].find(s => s.id === storyId);
-        if (story) {
-            foundStory = story;
-            break;
-        }
-    }
-    
-    if (foundStory) {
-        editingStory = foundStory;
-        currentPage = 'admin';
-        renderApp();
-        window.scrollTo(0, 0);
-    }
-}
-
-function cancelEdit() {
-    editingStory = null;
-    renderApp();
-}
-
-async function saveEditedStory() {
-    const statusDiv = document.getElementById('status-message');
-    
-    try {
-        const updatedStory = {
-            title: document.getElementById('title-input').value,
-            organization: document.getElementById('org-input').value,
-            location: document.getElementById('location-input').value,
-            summary: document.getElementById('summary-input').value,
-            impact_metrics: document.getElementById('metrics-input').value.split('\n').filter(m => m.trim()),
-            category: document.getElementById('category-input').value,
-            source_url: document.getElementById('source-input').value
-        };
-        
-        const { error } = await supabase
-            .from('stories')
-            .update(updatedStory)
-            .eq('id', editingStory.id);
-        
-        if (error) throw error;
-        
-        statusDiv.innerHTML = '<div class="status-message success">✓ Story updated!</div>';
-        editingStory = null;
-        await loadStories();
-        
-        setTimeout(() => {
-            currentPage = 'home';
-            renderApp();
-        }, 1500);
-        
-    } catch (error) {
-        statusDiv.innerHTML = `<div class="status-message error">Error: ${error.message}</div>`;
     }
 }
 
@@ -496,7 +666,7 @@ async function processStory() {
     
     processBtn.disabled = true;
     processBtn.textContent = 'Processing...';
-    statusDiv.innerHTML = '<div class="status-message info">Analyzing content with AI and searching for context...</div>';
+    statusDiv.innerHTML = '<div class="status-message info">🤖 AI is analyzing the story and finding related context sources. This may take 30-60 seconds...</div>';
     
     try {
         const response = await fetch('/.netlify/functions/process-story', {
@@ -510,60 +680,242 @@ async function processStory() {
             throw new Error(error.error || 'Processing failed');
         }
 
-        const storyData = await response.json();
+        const result = await response.json();
+        const { primaryStory, darkStories } = result;
         
-        // Store context search queries as context sources for now
-        const contextSources = storyData.contextSummary ? 
-            [storyData.contextSummary] : [];
+        statusDiv.innerHTML = '<div class="status-message info">✓ AI processing complete! Saving to database...</div>';
         
-        const { error } = await supabase.from('stories').insert([{
-            title: storyData.title,
-            organization: storyData.organization,
-            location: storyData.location,
-            summary: storyData.summary,
-            impact_metrics: storyData.impactMetrics,
-            category: storyData.category,
-            source_url: storyData.sourceUrl,
-            context_sources: contextSources,
+        // Insert dark stories first
+        const darkStoryIds = [];
+        for (const darkStory of darkStories) {
+            const { data, error } = await supabase.from('stories').insert([{
+                title: darkStory.title,
+                organization: 'Context Research',
+                location: 'Global',
+                summary: darkStory.summary,
+                impact_metrics: darkStory.keyFacts,
+                category: 'dark',
+                source_url: darkStory.sourceUrls[0],
+                source_urls: darkStory.sourceUrls,
+                utm_campaign: 'positive-impact'
+            }]).select();
+            
+            if (error) throw error;
+            if (data && data[0]) darkStoryIds.push(data[0].id);
+        }
+        
+        // Insert primary story with links to dark stories
+        const { error: primaryError } = await supabase.from('stories').insert([{
+            title: primaryStory.title,
+            organization: primaryStory.organization,
+            location: primaryStory.location,
+            summary: primaryStory.summary,
+            impact_metrics: primaryStory.impactMetrics,
+            category: primaryStory.category,
+            source_url: primaryStory.sourceUrls[0],
+            source_urls: primaryStory.sourceUrls,
+            related_dark_story_ids: darkStoryIds,
             utm_campaign: 'positive-impact'
         }]);
         
-        if (error) throw error;
+        if (primaryError) throw primaryError;
         
         statusDiv.innerHTML = `
             <div class="status-message success">
-                ✓ Story added!<br>
+                ✓ Success! Added 1 ${primaryStory.category} story and ${darkStories.length} context stories.<br>
                 <small style="margin-top: 10px; display: block;">
-                    <strong>Context to explore:</strong><br>
-                    ${storyData.contextSearchQueries ? storyData.contextSearchQueries.map(q => `• ${q}`).join('<br>') : 'None suggested'}
+                    The ${primaryStory.category} story is now linked to its contextual "Dark" stories.
                 </small>
             </div>
         `;
+        
         urlInput.value = '';
         notesInput.value = '';
         await loadStories();
+        await loadAnalytics();
         
     } catch (error) {
         statusDiv.innerHTML = `<div class="status-message error">Error: ${error.message}</div>`;
     } finally {
         processBtn.disabled = false;
-        processBtn.textContent = 'Process & Add Story';
+        processBtn.textContent = '🤖 Process with AI';
+    }
+}
+
+function editStoryFromDashboard(storyId) {
+    const story = allStories.find(s => s.id === storyId);
+    if (story) {
+        editingStory = story;
+        renderApp();
+        window.scrollTo(0, 0);
+    }
+}
+
+function cancelEdit() {
+    editingStory = null;
+    renderApp();
+}
+
+async function saveEditedStory() {
+    const statusDiv = document.getElementById('status-message');
+    
+    try {
+        const sourceUrls = document.getElementById('sources-input').value
+            .split('\n')
+            .map(url => url.trim())
+            .filter(url => url);
+        
+        const updatedStory = {
+            title: document.getElementById('title-input').value,
+            organization: document.getElementById('org-input').value,
+            location: document.getElementById('location-input').value,
+            summary: document.getElementById('summary-input').value,
+            impact_metrics: document.getElementById('metrics-input').value.split('\n').filter(m => m.trim()),
+            category: document.getElementById('category-input').value,
+            source_url: sourceUrls[0] || '',
+            source_urls: sourceUrls
+        };
+        
+        const { error } = await supabase
+            .from('stories')
+            .update(updatedStory)
+            .eq('id', editingStory.id);
+        
+        if (error) throw error;
+        
+        statusDiv.innerHTML = '<div class="status-message success">✓ Story updated!</div>';
+        editingStory = null;
+        await loadStories();
+        await loadAnalytics();
+        
+        setTimeout(() => renderApp(), 1500);
+        
+    } catch (error) {
+        statusDiv.innerHTML = `<div class="status-message error">Error: ${error.message}</div>`;
+    }
+}
+
+async function deleteStory(storyId) {
+    if (!confirm('Are you sure you want to delete this story? This cannot be undone.')) {
+        return;
+    }
+    
+    try {
+        const { error } = await supabase
+            .from('stories')
+            .delete()
+            .eq('id', storyId);
+        
+        if (error) throw error;
+        
+        await loadStories();
+        await loadAnalytics();
+        renderApp();
+        
+    } catch (error) {
+        alert('Error deleting story: ' + error.message);
+    }
+}
+
+async function loadSubscribersList() {
+    try {
+        const { data, error } = await supabase
+            .from('email_subscribers')
+            .select('*')
+            .eq('is_active', true)
+            .order('subscribed_at', { ascending: false });
+        
+        if (error) throw error;
+        
+        const listDiv = document.getElementById('subscribers-list');
+        if (data.length === 0) {
+            listDiv.innerHTML = '<p style="color: #666;">No subscribers yet.</p>';
+        } else {
+            listDiv.innerHTML = `
+                <div class="subscriber-list">
+                    ${data.map(sub => `
+                        <div class="subscriber-item">
+                            <span>${sub.email}</span>
+                            <span style="color: #999; font-size: 0.9rem;">
+                                ${new Date(sub.subscribed_at).toLocaleDateString()}
+                            </span>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+    } catch (error) {
+        document.getElementById('subscribers-list').innerHTML = 
+            `<p style="color: #ff6b6b;">Error loading subscribers: ${error.message}</p>`;
+    }
+}
+
+async function exportSubscribers() {
+    try {
+        const { data, error } = await supabase
+            .from('email_subscribers')
+            .select('email, subscribed_at')
+            .eq('is_active', true)
+            .order('subscribed_at', { ascending: false });
+        
+        if (error) throw error;
+        
+        const csv = [
+            'Email,Subscribed At',
+            ...data.map(sub => `${sub.email},${sub.subscribed_at}`)
+        ].join('\n');
+        
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `the-candle-subscribers-${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+        
+    } catch (error) {
+        alert('Error exporting: ' + error.message);
     }
 }
 
 function setupEventListeners() {
     document.addEventListener('click', (e) => {
+        // Section navigation
         if (e.target.dataset.section) {
             currentPage = e.target.dataset.section;
             renderApp();
             window.scrollTo(0, 0);
         }
+        
+        // Action buttons
         if (e.target.dataset.action) {
             currentPage = e.target.dataset.action;
             renderApp();
         }
+        
+        // Dashboard tabs
+        if (e.target.classList.contains('tab-btn')) {
+            const tabs = document.querySelectorAll('.tab-btn');
+            tabs.forEach(tab => tab.classList.remove('active'));
+            e.target.classList.add('active');
+            
+            const tabContent = document.getElementById('tab-content');
+            const tabName = e.target.dataset.tab;
+            
+            if (tabName === 'add') {
+                tabContent.innerHTML = renderAddStoryTab();
+            } else if (tabName === 'manage') {
+                tabContent.innerHTML = renderManageStoriesTab();
+            } else if (tabName === 'subscribers') {
+                tabContent.innerHTML = renderSubscribersTab();
+                loadSubscribersList();
+            } else if (tabName === 'analytics') {
+                tabContent.innerHTML = renderAnalyticsTab();
+            }
+        }
     });
     
+    // Hover tooltips
     document.addEventListener('mouseenter', (e) => {
         const target = e.target.closest('[data-section]');
         if (target && currentPage === 'home') {
