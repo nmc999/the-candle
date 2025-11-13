@@ -668,63 +668,82 @@ async function processStory() {
     statusDiv.innerHTML = '<div class="status-message info">🤖 AI is analyzing the story. This may take 20-30 seconds...</div>';
     
     try {
-        const response = await fetch('/.netlify/functions/process-story', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url, notes })
+        // Call Anthropic API directly from browser
+        const response = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "x-api-key": "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", // PASTE YOUR KEY HERE
+                "anthropic-version": "2023-06-01"
+            },
+            body: JSON.stringify({
+                model: "claude-sonnet-4-20250514",
+                max_tokens: 3000,
+                messages: [{
+                    role: "user",
+                    content: `Analyze this URL: ${url}
+
+Additional notes: ${notes || 'None'}
+
+Create a comprehensive story with:
+- Compelling title
+- 300-word summary focusing on positive impact
+- Organization name and location
+- 3-5 key impact metrics
+- Category: "flame" (most exciting/inspirational) or "light" (wider impact)
+- 2 additional credible source URLs where similar stories might be found
+
+Respond ONLY with valid JSON (no markdown, no backticks):
+{
+  "title": "Compelling title here",
+  "organization": "Organization name",
+  "location": "Location",
+  "summary": "300 word summary",
+  "impactMetrics": ["Metric 1", "Metric 2", "Metric 3"],
+  "category": "flame",
+  "additionalSourceUrls": ["https://source1.com", "https://source2.com"]
+}`
+                }]
+            })
         });
 
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Processing failed');
+            const errorData = await response.json();
+            throw new Error(errorData.error?.message || 'API request failed');
         }
 
-        const result = await response.json();
-        const { primaryStory, darkStories } = result;
+        const data = await response.json();
+        
+        let text = data.content[0].text
+            .replace(/```json\n?/g, '')
+            .replace(/```\n?/g, '')
+            .trim();
+        
+        const primaryStory = JSON.parse(text);
         
         statusDiv.innerHTML = '<div class="status-message info">✓ AI processing complete! Saving to database...</div>';
         
-        // Insert dark stories if any were generated
-        const darkStoryIds = [];
-        if (darkStories && darkStories.length > 0) {
-            for (const darkStory of darkStories) {
-                const { data, error } = await supabase.from('stories').insert([{
-                    title: darkStory.title,
-                    organization: 'Context Research',
-                    location: 'Global',
-                    summary: darkStory.summary,
-                    impact_metrics: darkStory.keyFacts,
-                    category: 'dark',
-                    source_url: darkStory.sourceUrls[0],
-                    source_urls: darkStory.sourceUrls,
-                    utm_campaign: 'positive-impact'
-                }]).select();
-                
-                if (error) throw error;
-                if (data && data[0]) darkStoryIds.push(data[0].id);
-            }
-        }
+        const allSourceUrls = [url, ...(primaryStory.additionalSourceUrls || [])];
         
-        // Insert primary story
-        const { error: primaryError } = await supabase.from('stories').insert([{
+        // Save to database
+        const { error: insertError } = await supabase.from('stories').insert([{
             title: primaryStory.title,
             organization: primaryStory.organization,
             location: primaryStory.location,
             summary: primaryStory.summary,
-            impact_metrics: primaryStory.impactMetrics,
+            impact_metrics: primaryStory.impactMetrics || [],
             category: primaryStory.category,
-            source_url: primaryStory.sourceUrls[0],
-            source_urls: primaryStory.sourceUrls,
-            related_dark_story_ids: darkStoryIds,
+            source_url: allSourceUrls[0],
+            source_urls: allSourceUrls,
+            related_dark_story_ids: [],
             utm_campaign: 'positive-impact'
         }]);
         
-        if (primaryError) throw primaryError;
+        if (insertError) throw insertError;
         
-        const darkCount = darkStories ? darkStories.length : 0;
         statusDiv.innerHTML = `
             <div class="status-message success">
-                ✓ Success! Added 1 ${primaryStory.category} story${darkCount > 0 ? ` and ${darkCount} context stories` : ''}.
+                ✓ Success! Added 1 ${primaryStory.category} story with ${allSourceUrls.length} sources.
             </div>
         `;
         
@@ -734,6 +753,7 @@ async function processStory() {
         await loadAnalytics();
         
     } catch (error) {
+        console.error('Processing error:', error);
         statusDiv.innerHTML = `<div class="status-message error">Error: ${error.message}</div>`;
     } finally {
         processBtn.disabled = false;
