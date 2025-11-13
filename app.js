@@ -31,6 +31,7 @@ async function init() {
 
 // Check URL route
 function checkRoute() {
+    // Check if we're in dashboard mode (dashboard.html)
     if (window.DASHBOARD_MODE === true) {
         currentPage = 'dashboard';
         return;
@@ -52,9 +53,9 @@ async function loadStories() {
         
         if (error) throw error;
         
-        allStories = data;
+        allStories = data || [];
         stories = { flame: [], light: [], dark: [] };
-        data.forEach(story => {
+        allStories.forEach(story => {
             if (stories[story.category]) {
                 stories[story.category].push(story);
             }
@@ -126,7 +127,6 @@ async function trackClick(storyId, url) {
         console.error('Error tracking click:', error);
     }
     
-    // Open link
     window.open(url, '_blank');
 }
 
@@ -198,7 +198,6 @@ function renderHomePage() {
             
             <p class="instruction">Click on any zone to explore • Hover for descriptions</p>
             
-            <!-- Email Capture Footer -->
             <div style="margin-top: 60px; max-width: 500px; text-align: center;">
                 <h3 style="color: #ffd700; margin-bottom: 15px;">Stay Illuminated</h3>
                 <p style="color: #ccc; margin-bottom: 20px;">Get weekly stories of positive impact in your inbox</p>
@@ -265,7 +264,6 @@ function renderStoryCard(story, section) {
     const sourceUrls = story.source_urls || [story.source_url];
     const relatedDarkIds = story.related_dark_story_ids || [];
     
-    // Get related dark stories
     const relatedDarkStories = relatedDarkIds
         .map(id => allStories.find(s => s.id === id))
         .filter(s => s);
@@ -427,7 +425,6 @@ function renderDashboard() {
                 <button onclick="logout()" class="btn" style="background: #6c757d;">Logout</button>
             </div>
             
-            <!-- Quick Stats -->
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-number">${analytics.storyCounts.flame + analytics.storyCounts.light + analytics.storyCounts.dark}</div>
@@ -447,7 +444,6 @@ function renderDashboard() {
                 </div>
             </div>
             
-            <!-- Tabs -->
             <div class="dashboard-tabs">
                 <button class="tab-btn active" data-tab="add">➕ Add Story</button>
                 <button class="tab-btn" data-tab="manage">📚 Manage Stories</button>
@@ -455,7 +451,6 @@ function renderDashboard() {
                 <button class="tab-btn" data-tab="analytics">📊 Analytics</button>
             </div>
             
-            <!-- Tab Content -->
             <div id="tab-content">
                 ${renderAddStoryTab()}
             </div>
@@ -596,7 +591,6 @@ function renderEditStory() {
     `;
 }
 
-// Navigation functions
 function navigateToStory(section, storyId) {
     currentPage = section;
     renderApp();
@@ -671,7 +665,7 @@ async function processStory() {
     
     processBtn.disabled = true;
     processBtn.textContent = 'Processing...';
-    statusDiv.innerHTML = '<div class="status-message info">🤖 AI is analyzing the story and finding related context sources. This may take 30-60 seconds...</div>';
+    statusDiv.innerHTML = '<div class="status-message info">🤖 AI is analyzing the story. This may take 20-30 seconds...</div>';
     
     try {
         const response = await fetch('/.netlify/functions/process-story', {
@@ -733,6 +727,20 @@ async function processStory() {
                 ✓ Success! Added 1 ${primaryStory.category} story${darkCount > 0 ? ` and ${darkCount} context stories` : ''}.
             </div>
         `;
+        
+        urlInput.value = '';
+        notesInput.value = '';
+        await loadStories();
+        await loadAnalytics();
+        
+    } catch (error) {
+        statusDiv.innerHTML = `<div class="status-message error">Error: ${error.message}</div>`;
+    } finally {
+        processBtn.disabled = false;
+        processBtn.textContent = '🤖 Process with AI';
+    }
+}
+
 function editStoryFromDashboard(storyId) {
     const story = allStories.find(s => s.id === storyId);
     if (story) {
@@ -871,20 +879,17 @@ async function exportSubscribers() {
 
 function setupEventListeners() {
     document.addEventListener('click', (e) => {
-        // Section navigation
         if (e.target.dataset.section) {
             currentPage = e.target.dataset.section;
             renderApp();
             window.scrollTo(0, 0);
         }
         
-        // Action buttons
         if (e.target.dataset.action) {
             currentPage = e.target.dataset.action;
             renderApp();
         }
         
-        // Dashboard tabs
         if (e.target.classList.contains('tab-btn')) {
             const tabs = document.querySelectorAll('.tab-btn');
             tabs.forEach(tab => tab.classList.remove('active'));
@@ -906,7 +911,6 @@ function setupEventListeners() {
         }
     });
     
-    // Hover tooltips
     document.addEventListener('mouseenter', (e) => {
         const target = e.target.closest('[data-section]');
         if (target && currentPage === 'home') {
