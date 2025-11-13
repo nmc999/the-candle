@@ -10,6 +10,7 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 let currentPage = 'home';
 let isAuthenticated = false;
 let stories = { flame: [], light: [], dark: [] };
+let editingStory = null;
 
 // Initialize app
 async function init() {
@@ -36,6 +37,20 @@ async function loadStories() {
         });
     } catch (error) {
         console.error('Error loading stories:', error);
+    }
+}
+
+// Generate UTM link
+function generateUTMLink(url, storyTitle) {
+    try {
+        const urlObj = new URL(url);
+        urlObj.searchParams.set('utm_source', 'the-candle');
+        urlObj.searchParams.set('utm_medium', 'referral');
+        urlObj.searchParams.set('utm_campaign', 'positive-impact');
+        urlObj.searchParams.set('utm_content', storyTitle.toLowerCase().replace(/\s+/g, '-').substring(0, 50));
+        return urlObj.toString();
+    } catch (e) {
+        return url;
     }
 }
 
@@ -106,6 +121,27 @@ function renderHomePage() {
             </div>
             
             <p class="instruction">Click on any zone to explore • Hover for descriptions</p>
+            
+            <!-- Email Capture Footer -->
+            <div style="margin-top: 60px; max-width: 500px; text-align: center;">
+                <h3 style="color: #ffd700; margin-bottom: 15px;">Stay Illuminated</h3>
+                <p style="color: #ccc; margin-bottom: 20px;">Get weekly stories of positive impact in your inbox</p>
+                <div style="display: flex; gap: 10px; justify-content: center;">
+                    <input 
+                        type="email" 
+                        id="email-signup" 
+                        placeholder="your@email.com"
+                        style="padding: 12px; border-radius: 6px; border: 2px solid #ffd700; background: rgba(255,255,255,0.1); color: white; flex: 1; max-width: 300px;"
+                    />
+                    <button 
+                        onclick="subscribeEmail()"
+                        style="padding: 12px 24px; background: #d4a017; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;"
+                    >
+                        Subscribe
+                    </button>
+                </div>
+                <div id="email-status" style="margin-top: 10px; font-size: 0.9rem;"></div>
+            </div>
         </div>
     `;
 }
@@ -216,23 +252,44 @@ function renderSectionPage(section) {
                 <p class="section-description">${config.description}</p>
                 ${sectionStories.length === 0 ? 
                     '<div class="story-card"><p>No stories yet. Check back soon!</p></div>' :
-                    sectionStories.map(story => `
-                        <div class="story-card">
-                            <h3>${story.title}</h3>
-                            <div class="story-meta">
-                                <strong>${story.organization}</strong> • ${story.location}
-                            </div>
-                            <p class="story-summary">${story.summary}</p>
-                            <div class="impact-metrics">
-                                <h4>Key Impact Metrics:</h4>
-                                <ul>
-                                    ${story.impact_metrics.map(metric => `<li>${metric}</li>`).join('')}
-                                </ul>
-                            </div>
-                            <a href="${story.source_url}" target="_blank" class="source-link">Read Source →</a>
-                        </div>
-                    `).join('')
+                    sectionStories.map(story => renderStoryCard(story)).join('')
                 }
+            </div>
+        </div>
+    `;
+}
+
+function renderStoryCard(story) {
+    const utmLink = generateUTMLink(story.source_url, story.title);
+    const editButton = isAuthenticated ? 
+        `<button onclick="editStory(${story.id})" style="margin-left: 15px; padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Edit Story</button>` 
+        : '';
+    
+    return `
+        <div class="story-card">
+            <h3>${story.title}</h3>
+            <div class="story-meta">
+                <strong>${story.organization}</strong> • ${story.location}
+            </div>
+            <p class="story-summary">${story.summary}</p>
+            <div class="impact-metrics">
+                <h4>Key Impact Metrics:</h4>
+                <ul>
+                    ${story.impact_metrics.map(metric => `<li>${metric}</li>`).join('')}
+                </ul>
+            </div>
+            ${story.context_sources && story.context_sources.length > 0 ? `
+                <div class="impact-metrics" style="margin-top: 20px;">
+                    <h4>Context & Background:</h4>
+                    <p style="color: #666; font-size: 0.9rem; margin-bottom: 10px;">Understanding the challenges this initiative addresses</p>
+                    <ul>
+                        ${story.context_sources.map(ctx => `<li>${ctx}</li>`).join('')}
+                    </ul>
+                </div>
+            ` : ''}
+            <div style="margin-top: 20px;">
+                <a href="${utmLink}" target="_blank" class="source-link">Read Source →</a>
+                ${editButton}
             </div>
         </div>
     `;
@@ -257,21 +314,63 @@ function renderPasswordModal() {
 }
 
 function renderAdminPage() {
+    const isEditing = editingStory !== null;
+    const story = isEditing ? editingStory : {};
+    
     return `
         <div class="admin-page">
             <div class="section-content">
                 <a class="back-button" data-action="home">← Back to Home</a>
                 <div class="admin-form">
-                    <h2>Add New Story</h2>
-                    <div class="form-group">
-                        <label>URL</label>
-                        <input type="url" id="url-input" placeholder="https://example.com/positive-impact-story">
-                    </div>
-                    <div class="form-group">
-                        <label>Notes (Optional)</label>
-                        <textarea id="notes-input" placeholder="Any additional context..."></textarea>
-                    </div>
-                    <button class="btn" id="process-btn" onclick="processStory()">Process & Add Story</button>
+                    <h2>${isEditing ? 'Edit Story' : 'Add New Story'}</h2>
+                    
+                    ${isEditing ? `
+                        <div class="form-group">
+                            <label>Title</label>
+                            <input type="text" id="title-input" value="${story.title || ''}" />
+                        </div>
+                        <div class="form-group">
+                            <label>Organization</label>
+                            <input type="text" id="org-input" value="${story.organization || ''}" />
+                        </div>
+                        <div class="form-group">
+                            <label>Location</label>
+                            <input type="text" id="location-input" value="${story.location || ''}" />
+                        </div>
+                        <div class="form-group">
+                            <label>Summary</label>
+                            <textarea id="summary-input" rows="8">${story.summary || ''}</textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Impact Metrics (one per line)</label>
+                            <textarea id="metrics-input" rows="5">${(story.impact_metrics || []).join('\n')}</textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Category</label>
+                            <select id="category-input">
+                                <option value="flame" ${story.category === 'flame' ? 'selected' : ''}>Flame</option>
+                                <option value="light" ${story.category === 'light' ? 'selected' : ''}>Light</option>
+                                <option value="dark" ${story.category === 'dark' ? 'selected' : ''}>Dark</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Source URL</label>
+                            <input type="url" id="source-input" value="${story.source_url || ''}" />
+                        </div>
+                        <button class="btn" onclick="saveEditedStory()">Save Changes</button>
+                        <button class="btn" onclick="cancelEdit()" style="background: #6c757d; margin-left: 10px;">Cancel</button>
+                    ` : `
+                        <div class="form-group">
+                            <label>URL</label>
+                            <input type="url" id="url-input" placeholder="https://example.com/positive-impact-story">
+                        </div>
+                        <div class="form-group">
+                            <label>Notes (Optional)</label>
+                            <textarea id="notes-input" placeholder="Any additional context..."></textarea>
+                        </div>
+                        <button class="btn" id="process-btn" onclick="processStory()">Process & Add Story</button>
+                    `}
+                    
                     <div id="status-message"></div>
                 </div>
             </div>
@@ -291,6 +390,96 @@ function checkPassword() {
     }
 }
 
+async function subscribeEmail() {
+    const emailInput = document.getElementById('email-signup');
+    const statusDiv = document.getElementById('email-status');
+    const email = emailInput.value.trim();
+    
+    if (!email || !email.includes('@')) {
+        statusDiv.innerHTML = '<span style="color: #ff6b6b;">Please enter a valid email</span>';
+        return;
+    }
+    
+    try {
+        const { error } = await supabase
+            .from('email_subscribers')
+            .insert([{ email }]);
+        
+        if (error) {
+            if (error.code === '23505') { // Unique constraint violation
+                statusDiv.innerHTML = '<span style="color: #ffd700;">You\'re already subscribed!</span>';
+            } else {
+                throw error;
+            }
+        } else {
+            statusDiv.innerHTML = '<span style="color: #4caf50;">✓ Subscribed! Check your inbox weekly.</span>';
+            emailInput.value = '';
+        }
+    } catch (error) {
+        console.error('Subscription error:', error);
+        statusDiv.innerHTML = '<span style="color: #ff6b6b;">Error subscribing. Please try again.</span>';
+    }
+}
+
+function editStory(storyId) {
+    // Find the story in our stories object
+    let foundStory = null;
+    for (const category in stories) {
+        const story = stories[category].find(s => s.id === storyId);
+        if (story) {
+            foundStory = story;
+            break;
+        }
+    }
+    
+    if (foundStory) {
+        editingStory = foundStory;
+        currentPage = 'admin';
+        renderApp();
+        window.scrollTo(0, 0);
+    }
+}
+
+function cancelEdit() {
+    editingStory = null;
+    renderApp();
+}
+
+async function saveEditedStory() {
+    const statusDiv = document.getElementById('status-message');
+    
+    try {
+        const updatedStory = {
+            title: document.getElementById('title-input').value,
+            organization: document.getElementById('org-input').value,
+            location: document.getElementById('location-input').value,
+            summary: document.getElementById('summary-input').value,
+            impact_metrics: document.getElementById('metrics-input').value.split('\n').filter(m => m.trim()),
+            category: document.getElementById('category-input').value,
+            source_url: document.getElementById('source-input').value
+        };
+        
+        const { error } = await supabase
+            .from('stories')
+            .update(updatedStory)
+            .eq('id', editingStory.id);
+        
+        if (error) throw error;
+        
+        statusDiv.innerHTML = '<div class="status-message success">✓ Story updated!</div>';
+        editingStory = null;
+        await loadStories();
+        
+        setTimeout(() => {
+            currentPage = 'home';
+            renderApp();
+        }, 1500);
+        
+    } catch (error) {
+        statusDiv.innerHTML = `<div class="status-message error">Error: ${error.message}</div>`;
+    }
+}
+
 async function processStory() {
     const urlInput = document.getElementById('url-input');
     const notesInput = document.getElementById('notes-input');
@@ -307,7 +496,7 @@ async function processStory() {
     
     processBtn.disabled = true;
     processBtn.textContent = 'Processing...';
-    statusDiv.innerHTML = '<div class="status-message info">Analyzing content with AI...</div>';
+    statusDiv.innerHTML = '<div class="status-message info">Analyzing content with AI and searching for context...</div>';
     
     try {
         const response = await fetch('/.netlify/functions/process-story', {
@@ -323,6 +512,10 @@ async function processStory() {
 
         const storyData = await response.json();
         
+        // Store context search queries as context sources for now
+        const contextSources = storyData.contextSummary ? 
+            [storyData.contextSummary] : [];
+        
         const { error } = await supabase.from('stories').insert([{
             title: storyData.title,
             organization: storyData.organization,
@@ -330,12 +523,22 @@ async function processStory() {
             summary: storyData.summary,
             impact_metrics: storyData.impactMetrics,
             category: storyData.category,
-            source_url: storyData.sourceUrl
+            source_url: storyData.sourceUrl,
+            context_sources: contextSources,
+            utm_campaign: 'positive-impact'
         }]);
         
         if (error) throw error;
         
-        statusDiv.innerHTML = '<div class="status-message success">✓ Story added!</div>';
+        statusDiv.innerHTML = `
+            <div class="status-message success">
+                ✓ Story added!<br>
+                <small style="margin-top: 10px; display: block;">
+                    <strong>Context to explore:</strong><br>
+                    ${storyData.contextSearchQueries ? storyData.contextSearchQueries.map(q => `• ${q}`).join('<br>') : 'None suggested'}
+                </small>
+            </div>
+        `;
         urlInput.value = '';
         notesInput.value = '';
         await loadStories();
