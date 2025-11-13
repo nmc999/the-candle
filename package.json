@@ -1,0 +1,9 @@
+{
+  "name": "the-candle",
+  "version": "1.0.0",
+  "description": "Positive news aggregator",
+  "private": true,
+  "scripts": {
+    "build": "echo 'No build step required'"
+  }
+}
