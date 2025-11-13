@@ -730,57 +730,49 @@ async function processStory() {
 async function generateDarkStories(primaryStoryId, storyTitle, storyUrl) {
     const statusDiv = document.getElementById('status-message');
     
-    statusDiv.innerHTML = '<div class="status-message info">🌑 Generating context stories (~20 seconds)...</div>';
+    statusDiv.innerHTML = '<div class="status-message info">🌑 Generating context story (~10 seconds)...</div>';
     
     try {
         const response = await fetch('/.netlify/functions/generate-dark-stories', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                storyTitle,
-                storyUrl,
-                problemContext: 'Analyze the underlying problem this initiative addresses'
-            })
+            body: JSON.stringify({ storyTitle, storyUrl })
         });
 
         if (!response.ok) {
             const error = await response.json();
-            throw new Error(error.error || 'Dark story generation failed');
+            throw new Error(error.error || 'Generation failed');
         }
 
         const result = await response.json();
-        const { darkStories } = result;
+        const { darkStory } = result;  // Changed from darkStories to darkStory
         
-        // Save dark stories to database
-        const darkStoryIds = [];
-        for (const darkStory of darkStories) {
-            const { data, error } = await supabase.from('stories').insert([{
-                title: darkStory.title,
-                organization: 'Context Research',
-                location: 'Global',
-                summary: darkStory.summary,
-                impact_metrics: darkStory.keyFacts,
-                category: 'dark',
-                source_url: darkStory.sourceUrls[0],
-                source_urls: darkStory.sourceUrls,
-                utm_campaign: 'positive-impact'
-            }]).select();
-            
-            if (error) throw error;
-            if (data && data[0]) darkStoryIds.push(data[0].id);
-        }
+        // Save single dark story
+        const { data, error } = await supabase.from('stories').insert([{
+            title: darkStory.title,
+            organization: 'Context Research',
+            location: 'Global',
+            summary: darkStory.summary,
+            impact_metrics: darkStory.keyFacts,
+            category: 'dark',
+            source_url: darkStory.sourceUrls[0],
+            source_urls: darkStory.sourceUrls,
+            utm_campaign: 'positive-impact'
+        }]).select();
         
-        // Link dark stories to primary story
+        if (error) throw error;
+        
+        // Link to primary story
         const { error: updateError } = await supabase
             .from('stories')
-            .update({ related_dark_story_ids: darkStoryIds })
+            .update({ related_dark_story_ids: [data[0].id] })
             .eq('id', primaryStoryId);
         
         if (updateError) throw updateError;
         
         statusDiv.innerHTML = `
             <div class="status-message success">
-                ✓ Complete! Added ${darkStories.length} context stories and linked them to the primary story.
+                ✓ Context story added and linked!
             </div>
         `;
         
@@ -788,8 +780,8 @@ async function generateDarkStories(primaryStoryId, storyTitle, storyUrl) {
         await loadAnalytics();
         
     } catch (error) {
-        console.error('Dark story error:', error);
-        statusDiv.innerHTML = `<div class="status-message error">Error generating context: ${error.message}</div>`;
+        console.error('Error:', error);
+        statusDiv.innerHTML = `<div class="status-message error">Error: ${error.message}</div>`;
     }
 }
 
