@@ -28,7 +28,6 @@ async function loadStories() {
         
         if (error) throw error;
         
-        // Organize stories by category
         stories = { flame: [], light: [], dark: [] };
         data.forEach(story => {
             if (stories[story.category]) {
@@ -57,7 +56,6 @@ function renderApp() {
     }
 }
 
-// Render home page
 function renderHomePage() {
     return `
         <div class="home-page">
@@ -112,44 +110,97 @@ function renderHomePage() {
     `;
 }
 
-// Render section page
 function renderSectionPage(section) {
     const sectionConfig = {
-        flame: {
-            icon: '🔥',
-            title: 'The Flame',
-            description: 'The most exciting and inspirational stories of positive impact'
-        },
-        light: {
-            icon: '💡',
-            title: 'The Light',
-            description: 'Reports on wider impact and solid positive change'
-        },
-        dark: {
-            icon: '🌑',
-            title: 'The Dark',
-            description: 'Understanding the problems that make positive work necessary'
-        },
-        wax: {
-            icon: '🕯️',
-            title: 'The Wax',
-            description: 'Support organizations making a difference'
-        },
-        wick: {
-            icon: '🔥',
-            title: 'The Wick',
-            description: 'About The Candle'
-        }
+        flame: { icon: '🔥', title: 'The Flame', description: 'The most exciting and inspirational stories of positive impact' },
+        light: { icon: '💡', title: 'The Light', description: 'Reports on wider impact and solid positive change' },
+        dark: { icon: '🌑', title: 'The Dark', description: 'Understanding the problems that make positive work necessary' },
+        wax: { icon: '🕯️', title: 'The Wax', description: 'Support organizations making a difference' },
+        wick: { icon: '🔥', title: 'The Wick', description: 'About The Candle' }
     };
     
     const config = sectionConfig[section];
     
     if (section === 'wax') {
-        return renderWaxPage(config);
+        return `
+            <div class="section-page">
+                <div class="section-content">
+                    <a class="back-button" data-action="home">← Back to Home</a>
+                    <div class="section-header">
+                        <span style="font-size: 2rem;">${config.icon}</span>
+                        <h1>${config.title}</h1>
+                    </div>
+                    <p class="section-description">${config.description}</p>
+                    <div class="org-grid">
+                        <div class="org-card">
+                            <div class="org-logo">🏥</div>
+                            <h3>Doctors Without Borders</h3>
+                            <p>Medical humanitarian aid worldwide</p>
+                            <a href="https://www.doctorswithoutborders.org/" target="_blank" class="org-link">Visit Website</a>
+                        </div>
+                        <div class="org-card">
+                            <div class="org-logo">🌍</div>
+                            <h3>UNICEF</h3>
+                            <p>Supporting children's rights globally</p>
+                            <a href="https://www.unicef.org/" target="_blank" class="org-link">Visit Website</a>
+                        </div>
+                        <div class="org-card">
+                            <div class="org-logo">🌊</div>
+                            <h3>Ocean Conservancy</h3>
+                            <p>Protecting ocean ecosystems</p>
+                            <a href="https://oceanconservancy.org/" target="_blank" class="org-link">Visit Website</a>
+                        </div>
+                        <div class="org-card">
+                            <div class="org-logo">🍃</div>
+                            <h3>World Wildlife Fund</h3>
+                            <p>Conservation of nature and wildlife</p>
+                            <a href="https://www.worldwildlife.org/" target="_blank" class="org-link">Visit Website</a>
+                        </div>
+                        <div class="org-card">
+                            <div class="org-logo">💧</div>
+                            <h3>charity: water</h3>
+                            <p>Bringing clean water to developing nations</p>
+                            <a href="https://www.charitywater.org/" target="_blank" class="org-link">Visit Website</a>
+                        </div>
+                        <div class="org-card">
+                            <div class="org-logo">📚</div>
+                            <h3>Room to Read</h3>
+                            <p>Global literacy and gender equality in education</p>
+                            <a href="https://www.roomtoread.org/" target="_blank" class="org-link">Visit Website</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
     }
     
     if (section === 'wick') {
-        return renderWickPage(config);
+        return `
+            <div class="section-page">
+                <div class="section-content">
+                    <a class="back-button" data-action="home">← Back to Home</a>
+                    <div class="section-header">
+                        <span style="font-size: 2rem;">${config.icon}</span>
+                        <h1>${config.title}</h1>
+                    </div>
+                    <p class="section-description">${config.description}</p>
+                    <div class="story-card">
+                        <h3>Our Story</h3>
+                        <p class="story-summary">
+                            The Candle was founded on a simple belief: the world needs more light. While traditional news media gravitates toward crisis and conflict, countless positive initiatives go unreported. Organizations across the globe are solving problems, improving lives, and creating lasting change—but their stories remain in the shadows.
+                            <br><br>
+                            We created The Candle to illuminate these stories. Using intelligent technology to discover and curate positive impact narratives, we bring attention to the work that matters. Our mission is not to ignore the darkness, but to show the candles being lit within it.
+                        </p>
+                    </div>
+                    <div class="story-card">
+                        <h3>Admin Access</h3>
+                        <p class="story-summary">
+                            <a class="back-button" data-action="admin" style="color: #d4a017; cursor: pointer;">→ Go to Admin Panel</a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        `;
     }
     
     const sectionStories = stories[section] || [];
@@ -158,144 +209,35 @@ function renderSectionPage(section) {
         <div class="section-page">
             <div class="section-content">
                 <a class="back-button" data-action="home">← Back to Home</a>
-                
                 <div class="section-header">
                     <span style="font-size: 2rem;">${config.icon}</span>
                     <h1>${config.title}</h1>
                 </div>
                 <p class="section-description">${config.description}</p>
-                
                 ${sectionStories.length === 0 ? 
                     '<div class="story-card"><p>No stories yet. Check back soon!</p></div>' :
-                    sectionStories.map(story => renderStoryCard(story)).join('')
+                    sectionStories.map(story => `
+                        <div class="story-card">
+                            <h3>${story.title}</h3>
+                            <div class="story-meta">
+                                <strong>${story.organization}</strong> • ${story.location}
+                            </div>
+                            <p class="story-summary">${story.summary}</p>
+                            <div class="impact-metrics">
+                                <h4>Key Impact Metrics:</h4>
+                                <ul>
+                                    ${story.impact_metrics.map(metric => `<li>${metric}</li>`).join('')}
+                                </ul>
+                            </div>
+                            <a href="${story.source_url}" target="_blank" class="source-link">Read Source →</a>
+                        </div>
+                    `).join('')
                 }
             </div>
         </div>
     `;
 }
 
-// Render story card
-function renderStoryCard(story) {
-    return `
-        <div class="story-card">
-            <h3>${story.title}</h3>
-            <div class="story-meta">
-                <strong>${story.organization}</strong> • ${story.location}
-            </div>
-            <p class="story-summary">${story.summary}</p>
-            <div class="impact-metrics">
-                <h4>Key Impact Metrics:</h4>
-                <ul>
-                    ${story.impact_metrics.map(metric => `<li>${metric}</li>`).join('')}
-                </ul>
-            </div>
-            <a href="${story.source_url}" target="_blank" class="source-link">Read Source →</a>
-        </div>
-    `;
-}
-
-// Render wax page
-function renderWaxPage(config) {
-    return `
-        <div class="section-page">
-            <div class="section-content">
-                <a class="back-button" data-action="home">← Back to Home</a>
-                
-                <div class="section-header">
-                    <span style="font-size: 2rem;">${config.icon}</span>
-                    <h1>${config.title}</h1>
-                </div>
-                <p class="section-description">${config.description}</p>
-                
-                <div class="org-grid">
-                    <div class="org-card">
-                        <div class="org-logo">🏥</div>
-                        <h3>Doctors Without Borders</h3>
-                        <p>Medical humanitarian aid worldwide</p>
-                        <a href="https://www.doctorswithoutborders.org/" target="_blank" class="org-link">Visit Website</a>
-                    </div>
-                    
-                    <div class="org-card">
-                        <div class="org-logo">🌍</div>
-                        <h3>UNICEF</h3>
-                        <p>Supporting children's rights globally</p>
-                        <a href="https://www.unicef.org/" target="_blank" class="org-link">Visit Website</a>
-                    </div>
-                    
-                    <div class="org-card">
-                        <div class="org-logo">🌊</div>
-                        <h3>Ocean Conservancy</h3>
-                        <p>Protecting ocean ecosystems</p>
-                        <a href="https://oceanconservancy.org/" target="_blank" class="org-link">Visit Website</a>
-                    </div>
-                    
-                    <div class="org-card">
-                        <div class="org-logo">🍃</div>
-                        <h3>World Wildlife Fund</h3>
-                        <p>Conservation of nature and wildlife</p>
-                        <a href="https://www.worldwildlife.org/" target="_blank" class="org-link">Visit Website</a>
-                    </div>
-                    
-                    <div class="org-card">
-                        <div class="org-logo">💧</div>
-                        <h3>charity: water</h3>
-                        <p>Bringing clean water to developing nations</p>
-                        <a href="https://www.charitywater.org/" target="_blank" class="org-link">Visit Website</a>
-                    </div>
-                    
-                    <div class="org-card">
-                        <div class="org-logo">📚</div>
-                        <h3>Room to Read</h3>
-                        <p>Global literacy and gender equality in education</p>
-                        <a href="https://www.roomtoread.org/" target="_blank" class="org-link">Visit Website</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-}
-
-// Render wick page
-function renderWickPage(config) {
-    return `
-        <div class="section-page">
-            <div class="section-content">
-                <a class="back-button" data-action="home">← Back to Home</a>
-                
-                <div class="section-header">
-                    <span style="font-size: 2rem;">${config.icon}</span>
-                    <h1>${config.title}</h1>
-                </div>
-                <p class="section-description">${config.description}</p>
-                
-                <div class="story-card">
-                    <h3>Our Story</h3>
-                    <p class="story-summary">
-                        The Candle was founded on a simple belief: the world needs more light. While traditional news media gravitates toward crisis and conflict, countless positive initiatives go unreported. Organizations across the globe are solving problems, improving lives, and creating lasting change—but their stories remain in the shadows.
-                        <br><br>
-                        We created The Candle to illuminate these stories. Using intelligent technology to discover and curate positive impact narratives, we bring attention to the work that matters. Our mission is not to ignore the darkness, but to show the candles being lit within it.
-                    </p>
-                </div>
-                
-                <div class="story-card">
-                    <h3>Join Our Team</h3>
-                    <p class="story-summary">
-                        Currently, The Candle is in prototype phase. We're exploring partnerships with impact organizations and building our technology platform. If you're interested in contributing to this mission, we'd love to hear from you.
-                    </p>
-                </div>
-                
-                <div class="story-card">
-                    <h3>Admin Access</h3>
-                    <p class="story-summary">
-                        <a class="back-button" data-action="admin" style="color: #d4a017; cursor: pointer;">→ Go to Admin Panel</a>
-                    </p>
-                </div>
-            </div>
-        </div>
-    `;
-}
-
-// Render password modal
 function renderPasswordModal() {
     return `
         <div class="password-modal">
@@ -314,47 +256,29 @@ function renderPasswordModal() {
     `;
 }
 
-// Render admin page
 function renderAdminPage() {
     return `
         <div class="admin-page">
             <div class="section-content">
                 <a class="back-button" data-action="home">← Back to Home</a>
-                
                 <div class="admin-form">
                     <h2>Add New Story</h2>
-                    
                     <div class="form-group">
                         <label>URL</label>
                         <input type="url" id="url-input" placeholder="https://example.com/positive-impact-story">
                     </div>
-                    
                     <div class="form-group">
                         <label>Notes (Optional)</label>
-                        <textarea id="notes-input" placeholder="Any additional context or notes about this story..."></textarea>
+                        <textarea id="notes-input" placeholder="Any additional context..."></textarea>
                     </div>
-                    
                     <button class="btn" id="process-btn" onclick="processStory()">Process & Add Story</button>
-                    
                     <div id="status-message"></div>
-                    
-                    <div style="margin-top: 30px; padding: 20px; background: #f9f9f9; border-radius: 6px;">
-                        <h3 style="color: #333; margin-bottom: 10px;">How it works:</h3>
-                        <ol style="margin-left: 20px; color: #666;">
-                            <li>Paste a URL from a charity, NGO, business, or government site</li>
-                            <li>Claude will fetch and analyze the content</li>
-                            <li>AI creates a 300-word summary and extracts impact metrics</li>
-                            <li>Story is automatically categorized (Flame/Light/Dark)</li>
-                            <li>Story is saved to the database and appears on the site!</li>
-                        </ol>
-                    </div>
                 </div>
             </div>
         </div>
     `;
 }
 
-// Check password
 function checkPassword() {
     const input = document.getElementById('password-input');
     const error = document.getElementById('password-error');
@@ -367,7 +291,6 @@ function checkPassword() {
     }
 }
 
-// Process story with Claude
 async function processStory() {
     const urlInput = document.getElementById('url-input');
     const notesInput = document.getElementById('notes-input');
@@ -384,85 +307,62 @@ async function processStory() {
     
     processBtn.disabled = true;
     processBtn.textContent = 'Processing...';
-    statusDiv.innerHTML = '<div class="status-message info">Fetching and analyzing content...</div>';
+    statusDiv.innerHTML = '<div class="status-message info">Analyzing content with AI...</div>';
     
     try {
-        // Call Claude API to process the URL
         const response = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 model: "claude-sonnet-4-20250514",
                 max_tokens: 4000,
                 messages: [{
                     role: "user",
-                    content: `Please fetch and analyze this URL: ${url}
+                    content: `Analyze this URL: ${url}
 
-I need you to:
-1. Summarize the content in 300 words, focusing on positive impact
-2. Extract key information: organization name, location, project details
-3. Identify 3-5 key impact metrics as bullet points
-4. Categorize this story as either:
-   - "flame" (most exciting, inspirational stories)
-   - "light" (wider impact reports, solid positive news)
-   - "dark" (contextual problems that make the positive work necessary)
+Create a 300-word summary focusing on positive impact. Extract: organization name, location, 3-5 impact metrics.
+Categorize as: "flame" (exciting/inspirational), "light" (wider impact), or "dark" (problems addressed).
 
-Additional context from user: ${notes || 'None provided'}
+Notes: ${notes || 'None'}
 
-Respond ONLY with valid JSON in this exact format:
+Respond ONLY with JSON:
 {
-  "summary": "300 word summary here",
-  "organization": "Organization name",
+  "title": "Compelling title",
+  "organization": "Org name",
   "location": "Location",
+  "summary": "300 word summary",
   "impactMetrics": ["Metric 1", "Metric 2", "Metric 3"],
-  "category": "flame or light or dark",
-  "sourceUrl": "${url}",
-  "title": "Compelling title for this story"
+  "category": "flame/light/dark",
+  "sourceUrl": "${url}"
 }
 
-DO NOT include anything except the JSON object. No markdown, no backticks, no explanations.`
+NO markdown, NO backticks, ONLY JSON.`
                 }]
             })
         });
         
         const data = await response.json();
-        let responseText = data.content[0].text;
+        let text = data.content[0].text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        const storyData = JSON.parse(text);
         
-        // Strip markdown if present
-        responseText = responseText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-        
-        const storyData = JSON.parse(responseText);
-        
-        // Save to Supabase
-        const { error } = await supabase
-            .from('stories')
-            .insert([{
-                title: storyData.title,
-                organization: storyData.organization,
-                location: storyData.location,
-                summary: storyData.summary,
-                impact_metrics: storyData.impactMetrics,
-                category: storyData.category,
-                source_url: storyData.sourceUrl
-            }]);
+        const { error } = await supabase.from('stories').insert([{
+            title: storyData.title,
+            organization: storyData.organization,
+            location: storyData.location,
+            summary: storyData.summary,
+            impact_metrics: storyData.impactMetrics,
+            category: storyData.category,
+            source_url: storyData.sourceUrl
+        }]);
         
         if (error) throw error;
         
-        statusDiv.innerHTML = '<div class="status-message success">✓ Story added successfully!</div>';
+        statusDiv.innerHTML = '<div class="status-message success">✓ Story added!</div>';
         urlInput.value = '';
         notesInput.value = '';
-        
-        // Reload stories
         await loadStories();
         
-        setTimeout(() => {
-            statusDiv.innerHTML = '';
-        }, 3000);
-        
     } catch (error) {
-        console.error('Error:', error);
         statusDiv.innerHTML = `<div class="status-message error">Error: ${error.message}</div>`;
     } finally {
         processBtn.disabled = false;
@@ -470,19 +370,45 @@ DO NOT include anything except the JSON object. No markdown, no backticks, no ex
     }
 }
 
-// Setup event listeners
 function setupEventListeners() {
     document.addEventListener('click', (e) => {
-        const target = e.target;
-        
-        // Handle section navigation
-        if (target.dataset.section) {
-            currentPage = target.dataset.section;
+        if (e.target.dataset.section) {
+            currentPage = e.target.dataset.section;
             renderApp();
             window.scrollTo(0, 0);
         }
-        
-        // Handle action buttons
-        if (target.dataset.action) {
-            if (target.dataset.action === 'home') {
-                currentPa
+        if (e.target.dataset.action) {
+            currentPage = e.target.dataset.action;
+            renderApp();
+        }
+    });
+    
+    document.addEventListener('mouseenter', (e) => {
+        const target = e.target.closest('[data-section]');
+        if (target && currentPage === 'home') {
+            const tooltips = {
+                flame: { title: '🔥 The Flame', desc: 'Most exciting stories' },
+                light: { title: '💡 The Light', desc: 'Wider impact reports' },
+                dark: { title: '🌑 The Dark', desc: 'Problems being addressed' },
+                wax: { title: '🕯️ The Wax', desc: 'Support organizations' },
+                wick: { title: '🔥 The Wick', desc: 'About The Candle' }
+            };
+            const tooltip = document.getElementById('tooltip');
+            const info = tooltips[target.dataset.section];
+            if (tooltip && info) {
+                document.getElementById('tooltip-title').textContent = info.title;
+                document.getElementById('tooltip-desc').textContent = info.desc;
+                tooltip.classList.add('active');
+            }
+        }
+    }, true);
+    
+    document.addEventListener('mouseleave', (e) => {
+        if (e.target.closest('[data-section]') && currentPage === 'home') {
+            const tooltip = document.getElementById('tooltip');
+            if (tooltip) tooltip.classList.remove('active');
+        }
+    }, true);
+}
+
+window.addEventListener('DOMContentLoaded', init);
