@@ -31,6 +31,11 @@ async function init() {
 
 // Check URL route
 function checkRoute() {
+    if (window.DASHBOARD_MODE === true) {
+        currentPage = 'dashboard';
+        return;
+    }
+    
     const path = window.location.pathname;
     if (path === '/dashboard' || path === '/dashboard.html') {
         currentPage = 'dashboard';
