@@ -3,9 +3,6 @@
 
 [functions]
   node_bundler = "esbuild"
-  
-[[functions."process-story"]]
-  timeout = 60
 
 [[redirects]]
   from = "/*"
