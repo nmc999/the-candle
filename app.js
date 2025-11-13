@@ -63,42 +63,42 @@ function renderHomePage() {
             <p class="tagline">Illuminating positive impact across the globe</p>
             
             <div class="candle-visualization">
-                <div class="dark-zone" data-section="dark">
-                    <span class="dark-label">The Dark</span>
-                </div>
-                
-                <div class="light-zone" data-section="light">
-                    <span class="light-label">The Light</span>
-                </div>
-                
-                <div class="wax-zone" data-section="wax">
-                    <svg width="120" height="280" viewBox="0 0 120 280">
-                        <defs>
-                            <linearGradient id="waxGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                                <stop offset="0%" style="stop-color:#f4e4c1;stop-opacity:1" />
-                                <stop offset="50%" style="stop-color:#f9f3e3;stop-opacity:1" />
-                                <stop offset="100%" style="stop-color:#f4e4c1;stop-opacity:1" />
-                            </linearGradient>
-                        </defs>
-                        <path class="candle-body" d="M 30 40 L 90 40 L 85 270 L 35 270 Z" fill="url(#waxGradient)" stroke="#d4a574" stroke-width="2"/>
-                        <ellipse cx="60" cy="40" rx="30" ry="8" fill="#f4e4c1"/>
-                    </svg>
-                </div>
-                
-                <div class="wick-zone" data-section="wick">
-                    <svg width="120" height="50" viewBox="0 0 120 50">
-                        <rect x="55" y="0" width="10" height="45" fill="#2a2a2a" rx="2"/>
-                    </svg>
-                </div>
-                
-                <div class="flame-zone" data-section="flame">
-                    <svg width="120" height="100" viewBox="0 0 120 100" class="flame">
-                        <ellipse cx="60" cy="50" rx="35" ry="50" fill="#ff6b35" opacity="0.9"/>
-                        <ellipse cx="60" cy="55" rx="22" ry="35" fill="#ffa500"/>
-                        <ellipse cx="60" cy="60" rx="12" ry="22" fill="#ffeb3b"/>
-                    </svg>
-                </div>
-            </div>
+    <div class="dark-zone" data-section="dark" style="pointer-events: auto;">
+        <span class="dark-label" style="pointer-events: none;">The Dark</span>
+    </div>
+    
+    <div class="light-zone" data-section="light" style="pointer-events: auto;">
+        <span class="light-label" style="pointer-events: none;">The Light</span>
+    </div>
+    
+    <div class="wax-zone" data-section="wax" style="pointer-events: auto; width: 120px; height: 280px;">
+        <svg width="120" height="280" viewBox="0 0 120 280" style="pointer-events: none;">
+            <defs>
+                <linearGradient id="waxGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" style="stop-color:#f4e4c1;stop-opacity:1" />
+                    <stop offset="50%" style="stop-color:#f9f3e3;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#f4e4c1;stop-opacity:1" />
+                </linearGradient>
+            </defs>
+            <path class="candle-body" d="M 30 40 L 90 40 L 85 270 L 35 270 Z" fill="url(#waxGradient)" stroke="#d4a574" stroke-width="2"/>
+            <ellipse cx="60" cy="40" rx="30" ry="8" fill="#f4e4c1"/>
+        </svg>
+    </div>
+    
+    <div class="wick-zone" data-section="wick" style="pointer-events: auto; width: 120px; height: 50px;">
+        <svg width="120" height="50" viewBox="0 0 120 50" style="pointer-events: none;">
+            <rect x="55" y="0" width="10" height="45" fill="#2a2a2a" rx="2"/>
+        </svg>
+    </div>
+    
+    <div class="flame-zone" data-section="flame" style="pointer-events: auto; width: 120px; height: 100px;">
+        <svg width="120" height="100" viewBox="0 0 120 100" class="flame" style="pointer-events: none;">
+            <ellipse cx="60" cy="50" rx="35" ry="50" fill="#ff6b35" opacity="0.9"/>
+            <ellipse cx="60" cy="55" rx="22" ry="35" fill="#ffa500"/>
+            <ellipse cx="60" cy="60" rx="12" ry="22" fill="#ffeb3b"/>
+        </svg>
+    </div>
+</div>
             
             <div id="tooltip" class="hover-tooltip">
                 <h4 id="tooltip-title"></h4>
