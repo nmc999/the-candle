@@ -176,7 +176,17 @@ Respond ONLY with valid JSON (no markdown, no backticks):
 
     const allSourceUrls = [url, ...primaryStory.additionalSourceUrls];
 
-    console.log('All processing complete, returning result');
+    console.log('All processing complete, preparing response...');
+
+    const result = {
+      primaryStory: {
+        ...primaryStory,
+        sourceUrls: allSourceUrls
+      },
+      darkStories: darkStoriesData.darkStories
+    };
+
+    console.log('Result object created, returning...');
 
     return {
       statusCode: 200,
@@ -184,22 +194,21 @@ Respond ONLY with valid JSON (no markdown, no backticks):
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*'
       },
-      body: JSON.stringify({
-        primaryStory: {
-          ...primaryStory,
-          sourceUrls: allSourceUrls
-        },
-        darkStories: darkStoriesData.darkStories
-      })
+      body: JSON.stringify(result)
     };
 
   } catch (error) {
     console.error('Function error:', error);
+    console.error('Error stack:', error.stack);
     return {
       statusCode: 500,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      },
       body: JSON.stringify({ 
         error: error.message,
-        stack: error.stack 
+        details: error.stack 
       })
     };
   }
