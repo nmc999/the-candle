@@ -18,106 +18,75 @@ exports.handler = async (event, context) => {
 
     console.log('Processing URL:', url);
 
-    // STEP 1: Analyze the primary URL
-    console.log('Calling Anthropic API for primary analysis...');
+    // Make BOTH API calls in parallel for speed
+    console.log('Starting parallel API calls...');
     
-    const primaryResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 6000,
-        messages: [{
-          role: 'user',
-          content: `Analyze this URL about a positive initiative: ${url}
-
-TASK 1: Create a comprehensive story
-- Write a 300-word summary focusing on positive impact
-- Extract: organization name, location, project details
-- Identify 3-5 key impact metrics as bullet points
-- Create a compelling title
-- Categorize as: "flame" (exciting/inspirational) or "light" (wider impact)
-
-TASK 2: Suggest 2 additional credible sources
-Provide 2 realistic URLs where similar positive stories might be found.
-
-TASK 3: Identify the underlying problem
-What challenge does this initiative address?
+    const [primaryResponse, darkResponse] = await Promise.all([
+      // Primary story call
+      fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': process.env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 4000,
+          messages: [{
+            role: 'user',
+            content: `Analyze this URL about a positive initiative: ${url}
 
 Additional notes: ${notes || 'None'}
 
+Create a comprehensive story with:
+- Compelling title
+- 300-word summary focusing on positive impact
+- Organization name and location
+- 3-5 key impact metrics
+- Category: "flame" (exciting/inspirational) or "light" (wider impact)
+- 2 additional source URLs where similar stories might be found
+- Underlying problem this addresses (1 sentence)
+- 3 keywords about the problem
+
 Respond ONLY with valid JSON (no markdown, no backticks):
 {
-  "title": "Compelling title",
+  "title": "Title here",
   "organization": "Org name",
   "location": "Location",
-  "summary": "300 word summary",
+  "summary": "300 words",
   "impactMetrics": ["Metric 1", "Metric 2", "Metric 3"],
   "category": "flame",
   "additionalSourceUrls": ["https://source1.com", "https://source2.com"],
   "underlyingProblem": "Problem description",
-  "problemKeywords": ["keyword1", "keyword2"]
+  "problemKeywords": ["keyword1", "keyword2", "keyword3"]
 }`
-        }]
-      })
-    });
+          }]
+        })
+      }),
+      
+      // Dark stories call (runs simultaneously)
+      fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': process.env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 6000,
+          messages: [{
+            role: 'user',
+            content: `Create 3 contextual "Dark" stories about challenges related to this URL: ${url}
 
-    const primaryData = await primaryResponse.json();
-    
-    if (!primaryResponse.ok) {
-      console.error('Anthropic API error:', primaryData);
-      throw new Error(primaryData.error?.message || 'Primary analysis failed');
-    }
-
-    console.log('Primary response received');
-    
-    let primaryText = primaryData.content[0].text;
-    console.log('Raw primary text:', primaryText);
-    
-    // Clean the text
-    primaryText = primaryText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    console.log('Cleaned primary text:', primaryText);
-    
-    let primaryStory;
-    try {
-      primaryStory = JSON.parse(primaryText);
-      console.log('Primary story parsed successfully');
-    } catch (parseError) {
-      console.error('JSON parse error for primary story:', parseError);
-      console.error('Text that failed to parse:', primaryText);
-      throw new Error(`Failed to parse primary story JSON: ${parseError.message}`);
-    }
-
-    // STEP 2: Generate Dark stories
-    console.log('Calling Anthropic API for dark stories...');
-    
-    const darkResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 8000,
-        messages: [{
-          role: 'user',
-          content: `Problem: "${primaryStory.underlyingProblem}"
-Keywords: ${primaryStory.problemKeywords.join(', ')}
-
-Create 3 separate "Dark" stories about this problem:
-
-Story 1: Statistical overview
-Story 2: Human impact
-Story 3: Systemic causes
+Create stories about:
+1. Statistical overview of the problem
+2. Human impact stories
+3. Systemic causes
 
 For EACH story provide:
-- Title about the problem
+- Title about the problem (not solutions)
 - 200-word summary
 - 3-4 key facts
 - 3 source URLs
@@ -129,54 +98,58 @@ Respond ONLY with valid JSON (no markdown, no backticks):
       "title": "Problem title",
       "summary": "200 words",
       "keyFacts": ["Fact 1", "Fact 2", "Fact 3"],
-      "sourceUrls": ["https://source1.com", "https://source2.com", "https://source3.com"]
+      "sourceUrls": ["https://s1.com", "https://s2.com", "https://s3.com"]
     },
     {
-      "title": "Second title",
+      "title": "Title 2",
       "summary": "200 words",
       "keyFacts": ["Fact 1", "Fact 2", "Fact 3"],
-      "sourceUrls": ["https://source1.com", "https://source2.com", "https://source3.com"]
+      "sourceUrls": ["https://s1.com", "https://s2.com", "https://s3.com"]
     },
     {
-      "title": "Third title",
+      "title": "Title 3",
       "summary": "200 words",
       "keyFacts": ["Fact 1", "Fact 2", "Fact 3"],
-      "sourceUrls": ["https://source1.com", "https://source2.com", "https://source3.com"]
+      "sourceUrls": ["https://s1.com", "https://s2.com", "https://s3.com"]
     }
   ]
 }`
-        }]
+          }]
+        })
       })
-    });
+    ]);
 
+    console.log('Both API calls completed');
+
+    // Parse primary response
+    const primaryData = await primaryResponse.json();
+    if (!primaryResponse.ok) {
+      throw new Error(primaryData.error?.message || 'Primary analysis failed');
+    }
+
+    let primaryText = primaryData.content[0].text
+      .replace(/```json\n?/g, '')
+      .replace(/```\n?/g, '')
+      .trim();
+    
+    const primaryStory = JSON.parse(primaryText);
+    console.log('Primary story parsed');
+
+    // Parse dark response
     const darkData = await darkResponse.json();
-    
     if (!darkResponse.ok) {
-      console.error('Anthropic API error for dark stories:', darkData);
-      throw new Error(darkData.error?.message || 'Dark story generation failed');
+      throw new Error(darkData.error?.message || 'Dark stories failed');
     }
 
-    console.log('Dark response received');
+    let darkText = darkData.content[0].text
+      .replace(/```json\n?/g, '')
+      .replace(/```\n?/g, '')
+      .trim();
     
-    let darkText = darkData.content[0].text;
-    console.log('Raw dark text:', darkText);
-    
-    darkText = darkText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    console.log('Cleaned dark text:', darkText);
-    
-    let darkStoriesData;
-    try {
-      darkStoriesData = JSON.parse(darkText);
-      console.log('Dark stories parsed successfully');
-    } catch (parseError) {
-      console.error('JSON parse error for dark stories:', parseError);
-      console.error('Text that failed to parse:', darkText);
-      throw new Error(`Failed to parse dark stories JSON: ${parseError.message}`);
-    }
+    const darkStoriesData = JSON.parse(darkText);
+    console.log('Dark stories parsed');
 
     const allSourceUrls = [url, ...primaryStory.additionalSourceUrls];
-
-    console.log('All processing complete, preparing response...');
 
     const result = {
       primaryStory: {
@@ -186,7 +159,7 @@ Respond ONLY with valid JSON (no markdown, no backticks):
       darkStories: darkStoriesData.darkStories
     };
 
-    console.log('Result object created, returning...');
+    console.log('Returning result');
 
     return {
       statusCode: 200,
@@ -198,18 +171,14 @@ Respond ONLY with valid JSON (no markdown, no backticks):
     };
 
   } catch (error) {
-    console.error('Function error:', error);
-    console.error('Error stack:', error.stack);
+    console.error('Error:', error.message);
     return {
       statusCode: 500,
       headers: {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*'
       },
-      body: JSON.stringify({ 
-        error: error.message,
-        details: error.stack 
-      })
+      body: JSON.stringify({ error: error.message })
     };
   }
 };
