@@ -665,85 +665,51 @@ async function processStory() {
     
     processBtn.disabled = true;
     processBtn.textContent = 'Processing...';
-    statusDiv.innerHTML = '<div class="status-message info">🤖 AI is analyzing the story. This may take 20-30 seconds...</div>';
+    statusDiv.innerHTML = '<div class="status-message info">🤖 AI is analyzing the story (~15 seconds)...</div>';
     
     try {
-        // Call Anthropic API directly from browser
-        const response = await fetch("https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "x-api-key": "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", // PASTE YOUR KEY HERE
-                "anthropic-version": "2023-06-01"
-            },
-            body: JSON.stringify({
-                model: "claude-sonnet-4-20250514",
-                max_tokens: 3000,
-                messages: [{
-                    role: "user",
-                    content: `Analyze this URL: ${url}
-
-Additional notes: ${notes || 'None'}
-
-Create a comprehensive story with:
-- Compelling title
-- 300-word summary focusing on positive impact
-- Organization name and location
-- 3-5 key impact metrics
-- Category: "flame" (most exciting/inspirational) or "light" (wider impact)
-- 2 additional credible source URLs where similar stories might be found
-
-Respond ONLY with valid JSON (no markdown, no backticks):
-{
-  "title": "Compelling title here",
-  "organization": "Organization name",
-  "location": "Location",
-  "summary": "300 word summary",
-  "impactMetrics": ["Metric 1", "Metric 2", "Metric 3"],
-  "category": "flame",
-  "additionalSourceUrls": ["https://source1.com", "https://source2.com"]
-}`
-                }]
-            })
+        const response = await fetch('/.netlify/functions/process-story', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url, notes })
         });
 
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error?.message || 'API request failed');
+            const error = await response.json();
+            throw new Error(error.error || 'Processing failed');
         }
 
-        const data = await response.json();
+        const storyData = await response.json();
         
-        let text = data.content[0].text
-            .replace(/```json\n?/g, '')
-            .replace(/```\n?/g, '')
-            .trim();
-        
-        const primaryStory = JSON.parse(text);
-        
-        statusDiv.innerHTML = '<div class="status-message info">✓ AI processing complete! Saving to database...</div>';
-        
-        const allSourceUrls = [url, ...(primaryStory.additionalSourceUrls || [])];
+        statusDiv.innerHTML = '<div class="status-message info">✓ Story processed! Saving to database...</div>';
         
         // Save to database
-        const { error: insertError } = await supabase.from('stories').insert([{
-            title: primaryStory.title,
-            organization: primaryStory.organization,
-            location: primaryStory.location,
-            summary: primaryStory.summary,
-            impact_metrics: primaryStory.impactMetrics || [],
-            category: primaryStory.category,
-            source_url: allSourceUrls[0],
-            source_urls: allSourceUrls,
+        const { data: insertedData, error: insertError } = await supabase.from('stories').insert([{
+            title: storyData.title,
+            organization: storyData.organization,
+            location: storyData.location,
+            summary: storyData.summary,
+            impact_metrics: storyData.impactMetrics || [],
+            category: storyData.category,
+            source_url: storyData.sourceUrls[0],
+            source_urls: storyData.sourceUrls,
             related_dark_story_ids: [],
             utm_campaign: 'positive-impact'
-        }]);
+        }]).select();
         
         if (insertError) throw insertError;
         
+        const newStoryId = insertedData[0].id;
+        
         statusDiv.innerHTML = `
             <div class="status-message success">
-                ✓ Success! Added 1 ${primaryStory.category} story with ${allSourceUrls.length} sources.
+                ✓ Success! Added 1 ${storyData.category} story with ${storyData.sourceUrls.length} sources.
+                <div style="margin-top: 15px;">
+                    <button onclick="generateDarkStories(${newStoryId}, '${storyData.title.replace(/'/g, "\\'")}', '${url}')" 
+                            class="btn" style="font-size: 0.9rem; padding: 10px 20px;">
+                        🌑 Generate Context Stories (Optional)
+                    </button>
+                </div>
             </div>
         `;
         
@@ -761,12 +727,69 @@ Respond ONLY with valid JSON (no markdown, no backticks):
     }
 }
 
-function editStoryFromDashboard(storyId) {
-    const story = allStories.find(s => s.id === storyId);
-    if (story) {
-        editingStory = story;
-        renderApp();
-        window.scrollTo(0, 0);
+async function generateDarkStories(primaryStoryId, storyTitle, storyUrl) {
+    const statusDiv = document.getElementById('status-message');
+    
+    statusDiv.innerHTML = '<div class="status-message info">🌑 Generating context stories (~20 seconds)...</div>';
+    
+    try {
+        const response = await fetch('/.netlify/functions/generate-dark-stories', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                storyTitle,
+                storyUrl,
+                problemContext: 'Analyze the underlying problem this initiative addresses'
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Dark story generation failed');
+        }
+
+        const result = await response.json();
+        const { darkStories } = result;
+        
+        // Save dark stories to database
+        const darkStoryIds = [];
+        for (const darkStory of darkStories) {
+            const { data, error } = await supabase.from('stories').insert([{
+                title: darkStory.title,
+                organization: 'Context Research',
+                location: 'Global',
+                summary: darkStory.summary,
+                impact_metrics: darkStory.keyFacts,
+                category: 'dark',
+                source_url: darkStory.sourceUrls[0],
+                source_urls: darkStory.sourceUrls,
+                utm_campaign: 'positive-impact'
+            }]).select();
+            
+            if (error) throw error;
+            if (data && data[0]) darkStoryIds.push(data[0].id);
+        }
+        
+        // Link dark stories to primary story
+        const { error: updateError } = await supabase
+            .from('stories')
+            .update({ related_dark_story_ids: darkStoryIds })
+            .eq('id', primaryStoryId);
+        
+        if (updateError) throw updateError;
+        
+        statusDiv.innerHTML = `
+            <div class="status-message success">
+                ✓ Complete! Added ${darkStories.length} context stories and linked them to the primary story.
+            </div>
+        `;
+        
+        await loadStories();
+        await loadAnalytics();
+        
+    } catch (error) {
+        console.error('Dark story error:', error);
+        statusDiv.innerHTML = `<div class="status-message error">Error generating context: ${error.message}</div>`;
     }
 }
 
