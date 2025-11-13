@@ -7,7 +7,7 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    const { storyTitle, storyUrl, problemContext } = JSON.parse(event.body);
+    const { storyTitle, storyUrl } = JSON.parse(event.body);
 
     if (!storyTitle) {
       return {
@@ -16,7 +16,7 @@ exports.handler = async (event, context) => {
       };
     }
 
-    console.log('Generating dark stories for:', storyTitle);
+    console.log('Generating dark story for:', storyTitle);
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -27,47 +27,25 @@ exports.handler = async (event, context) => {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 6000,
+        max_tokens: 2000,
         messages: [{
           role: 'user',
           content: `For this positive initiative: "${storyTitle}"
-Source: ${storyUrl || 'Not provided'}
-Context: ${problemContext || 'Analyze the underlying challenge this addresses'}
 
-Create 3 separate "Dark" stories providing context about the problem:
+Create ONE "Dark" context story about the underlying problem this addresses.
 
-Story 1: Statistical overview of the challenge
-Story 2: Human impact and real-world consequences
-Story 3: Systemic causes and why this problem persists
-
-For EACH story provide:
-- Title focused on the problem (not solutions)
-- 200-word summary explaining the challenge
-- 3-4 key facts/statistics
-- 3 credible source URLs (news, research, WHO/UN reports, etc.)
+Provide:
+- Title about the problem (not the solution)
+- 150-word summary of the challenge
+- 3 key statistics/facts
+- 2 credible source URLs
 
 Respond ONLY with valid JSON (no markdown, no backticks):
 {
-  "darkStories": [
-    {
-      "title": "Problem title",
-      "summary": "200 words",
-      "keyFacts": ["Fact 1", "Fact 2", "Fact 3"],
-      "sourceUrls": ["https://source1.com", "https://source2.com", "https://source3.com"]
-    },
-    {
-      "title": "Second angle title",
-      "summary": "200 words",
-      "keyFacts": ["Fact 1", "Fact 2", "Fact 3"],
-      "sourceUrls": ["https://source1.com", "https://source2.com", "https://source3.com"]
-    },
-    {
-      "title": "Third angle title",
-      "summary": "200 words",
-      "keyFacts": ["Fact 1", "Fact 2", "Fact 3"],
-      "sourceUrls": ["https://source1.com", "https://source2.com", "https://source3.com"]
-    }
-  ]
+  "title": "Problem title",
+  "summary": "150 words about the challenge",
+  "keyFacts": ["Fact 1", "Fact 2", "Fact 3"],
+  "sourceUrls": ["https://source1.com", "https://source2.com"]
 }`
         }]
       })
@@ -76,7 +54,7 @@ Respond ONLY with valid JSON (no markdown, no backticks):
     const data = await response.json();
     
     if (!response.ok) {
-      throw new Error(data.error?.message || 'Dark story generation failed');
+      throw new Error(data.error?.message || 'Generation failed');
     }
 
     let text = data.content[0].text
@@ -84,9 +62,9 @@ Respond ONLY with valid JSON (no markdown, no backticks):
       .replace(/```\n?/g, '')
       .trim();
     
-    const result = JSON.parse(text);
+    const darkStory = JSON.parse(text);
 
-    console.log('Dark stories generated successfully');
+    console.log('Dark story generated');
 
     return {
       statusCode: 200,
@@ -94,7 +72,7 @@ Respond ONLY with valid JSON (no markdown, no backticks):
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*'
       },
-      body: JSON.stringify(result)
+      body: JSON.stringify({ darkStory })
     };
 
   } catch (error) {
