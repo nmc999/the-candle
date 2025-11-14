@@ -724,9 +724,19 @@ async function pollJobStatus(jobId, statusDiv, processBtn) {
         }
         
         if (job.status === 'completed') {
+            const storyId = job.result_data.storyId;
+            const storyTitle = job.result_data.story.title;
+            const inputUrl = job.input_data.url;
+            
             statusDiv.innerHTML = `
                 <div class="status-message success">
-                    ✓ Success! Story added: "${job.result_data.story.title}"
+                    ✓ Success! Story added: "${storyTitle}"
+                    <div style="margin-top: 15px;">
+                        <button onclick="generateDarkStoriesBackground(${storyId}, '${storyTitle.replace(/'/g, "\\'")}', '${inputUrl}')" 
+                                class="btn" style="font-size: 0.9rem; padding: 10px 20px;">
+                            🌑 Generate Context Story (Optional)
+                        </button>
+                    </div>
                 </div>
             `;
             processBtn.disabled = false;
@@ -762,6 +772,99 @@ async function pollJobStatus(jobId, statusDiv, processBtn) {
     };
     
     // Start polling after 5 seconds (give function time to start)
+    setTimeout(checkStatus, 5000);
+}
+
+async function generateDarkStoriesBackground(primaryStoryId, storyTitle, storyUrl) {
+    const statusDiv = document.getElementById('status-message');
+    
+    statusDiv.innerHTML = '<div class="status-message info">🌑 Starting context story generation...</div>';
+    
+    try {
+        // Create a processing job for dark story
+        const { data: job, error: jobError } = await supabase.from('processing_jobs').insert([{
+            job_type: 'dark_story',
+            status: 'pending',
+            input_data: { 
+                storyTitle, 
+                storyUrl, 
+                primaryStoryId 
+            }
+        }]).select();
+        
+        if (jobError) throw jobError;
+        
+        const jobId = job[0].id;
+        
+        statusDiv.innerHTML = `
+            <div class="status-message info">
+                🌑 Generating context story in background...<br>
+                <small>This may take 30-60 seconds. Job ID: ${jobId}</small>
+            </div>
+        `;
+        
+        // Trigger the background function
+        fetch('/.netlify/functions/process-job', { method: 'POST' })
+            .catch(e => console.log('Background trigger sent'));
+        
+        // Poll for completion
+        pollDarkJobStatus(jobId, statusDiv);
+        
+    } catch (error) {
+        console.error('Error:', error);
+        statusDiv.innerHTML = `<div class="status-message error">Error: ${error.message}</div>`;
+    }
+}
+
+async function pollDarkJobStatus(jobId, statusDiv) {
+    const maxAttempts = 60;
+    let attempts = 0;
+    
+    const checkStatus = async () => {
+        attempts++;
+        
+        const { data: job, error } = await supabase
+            .from('processing_jobs')
+            .select('*')
+            .eq('id', jobId)
+            .single();
+        
+        if (error) {
+            statusDiv.innerHTML = `<div class="status-message error">Error checking status: ${error.message}</div>`;
+            return;
+        }
+        
+        if (job.status === 'completed') {
+            statusDiv.innerHTML = `
+                <div class="status-message success">
+                    ✓ Context story generated and linked successfully!
+                </div>
+            `;
+            await loadStories();
+            await loadAnalytics();
+            return;
+        }
+        
+        if (job.status === 'failed') {
+            statusDiv.innerHTML = `<div class="status-message error">Context story generation failed: ${job.error_message}</div>`;
+            return;
+        }
+        
+        if (attempts >= maxAttempts) {
+            statusDiv.innerHTML = `
+                <div class="status-message error">
+                    Generation is taking longer than expected. Job ID: ${jobId}<br>
+                    <button onclick="pollDarkJobStatus(${jobId}, document.getElementById('status-message'))" class="btn" style="margin-top: 10px;">
+                        Check Status Again
+                    </button>
+                </div>
+            `;
+            return;
+        }
+        
+        setTimeout(checkStatus, 2000);
+    };
+    
     setTimeout(checkStatus, 5000);
 }
 
