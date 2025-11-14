@@ -597,8 +597,16 @@ function renderJobsTab() {
 function renderSubscribersTab() {
     return `
         <div class="tab-panel">
-            <h2>Email Subscribers (${analytics.subscriberCount})</h2>
-            <button onclick="exportSubscribers()" class="btn" style="margin-bottom: 20px;">📥 Export to CSV</button>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>Email Subscribers (${analytics.subscriberCount})</h2>
+                <button onclick="exportSubscribers()" class="btn" style="background: #4caf50;">📥 Export to CSV</button>
+            </div>
+            
+            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <button class="btn-small" onclick="filterSubscribers('active')" id="sub-filter-active" style="background: #b8860b;">Active</button>
+                <button class="btn-small" onclick="filterSubscribers('all')" id="sub-filter-all">All</button>
+            </div>
+            
             <div id="subscribers-list">
                 <p style="color: #666;">Loading subscribers...</p>
             </div>
@@ -1388,13 +1396,18 @@ function clearSelection() {
 }
 
 // Subscriber Management Functions
-async function loadSubscribersList() {
+async function loadSubscribersList(filterType = 'active') {
     try {
-        const { data, error } = await supabase
+        let query = supabase
             .from('email_subscribers')
             .select('*')
-            .eq('is_active', true)
             .order('subscribed_at', { ascending: false });
+        
+        if (filterType === 'active') {
+            query = query.eq('is_active', true);
+        }
+        
+        const { data, error } = await query;
         
         if (error) throw error;
         
@@ -1403,13 +1416,19 @@ async function loadSubscribersList() {
             listDiv.innerHTML = '<p style="color: #666;">No subscribers yet.</p>';
         } else {
             listDiv.innerHTML = `
+                <div style="margin-bottom: 20px; color: #666;">
+                    Showing ${data.length} subscriber${data.length !== 1 ? 's' : ''}
+                </div>
                 <div class="subscriber-list">
                     ${data.map(sub => `
-                        <div class="subscriber-item">
-                            <span>${sub.email}</span>
-                            <span style="color: #999; font-size: 0.9rem;">
-                                ${new Date(sub.subscribed_at).toLocaleDateString()}
-                            </span>
+                        <div class="subscriber-item" style="display: flex; justify-content: space-between; align-items: center; padding: 15px; background: #f9f9f9; border-radius: 6px; margin-bottom: 10px;">
+                            <div>
+                                <strong>${sub.email}</strong>
+                                ${!sub.is_active ? '<span style="color: #dc3545; margin-left: 10px;">(Unsubscribed)</span>' : ''}
+                                <div style="color: #999; font-size: 0.9rem; margin-top: 5px;">
+                                    Subscribed: ${new Date(sub.subscribed_at).toLocaleDateString()}
+                                </div>
+                            </div>
                         </div>
                     `).join('')}
                 </div>
@@ -1765,6 +1784,15 @@ async function renderClicksChart() {
             }
         }
     });
+}
+
+function filterSubscribers(filterType) {
+    document.querySelectorAll('[id^="sub-filter-"]').forEach(btn => {
+        btn.style.background = '#d4a017';
+    });
+    document.getElementById(`sub-filter-${filterType}`).style.background = '#b8860b';
+    
+    loadSubscribersList(filterType);
 }
 
 window.addEventListener('DOMContentLoaded', init);
