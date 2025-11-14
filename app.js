@@ -610,6 +610,12 @@ function renderAnalyticsTab() {
     return `
         <div class="tab-panel">
             <h2>Story Performance</h2>
+            
+            <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <h3 style="margin-top: 0;">Clicks Over Time (Last 30 Days)</h3>
+                <canvas id="clicks-chart" height="80"></canvas>
+            </div>
+            
             <div class="analytics-table">
                 <table>
                     <thead>
@@ -1468,6 +1474,7 @@ function setupEventListeners() {
                 loadSubscribersList();
             } else if (tabName === 'analytics') {
                 tabContent.innerHTML = renderAnalyticsTab();
+                setTimeout(() => renderClicksChart(), 100);
             }
         }
     });
@@ -1689,6 +1696,66 @@ function exportStories(format) {
         a.click();
         window.URL.revokeObjectURL(url);
     }
+}
+// Analytics Chart
+async function renderClicksChart() {
+    const canvas = document.getElementById('clicks-chart');
+    if (!canvas) return;
+    
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    const dates = [];
+    const clicksByDate = {};
+    
+    for (let i = 29; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        const dateStr = date.toISOString().split('T')[0];
+        dates.push(dateStr);
+        clicksByDate[dateStr] = 0;
+    }
+    
+    allStories.forEach(story => {
+        const storyDate = new Date(story.created_at).toISOString().split('T')[0];
+        if (clicksByDate.hasOwnProperty(storyDate)) {
+            clicksByDate[storyDate] += (story.click_count || 0);
+        }
+    });
+    
+    const data = dates.map(date => clicksByDate[date]);
+    
+    new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: dates.map(d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
+            datasets: [{
+                label: 'Total Clicks',
+                data: data,
+                borderColor: '#d4a017',
+                backgroundColor: 'rgba(212, 160, 23, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
 }
 
 window.addEventListener('DOMContentLoaded', init);
