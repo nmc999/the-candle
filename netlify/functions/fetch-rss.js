@@ -1,16 +1,4 @@
 const { createClient } = require('@supabase/supabase-js');
-const Parser = require('rss-parser');
-
-const parser = new Parser({
-  timeout: 10000,
-  headers: {
-    'User-Agent': 'Mozilla/5.0 (compatible; The-Candle/1.0; +https://thecandle.live)',
-    'Accept': 'application/rss+xml, application/xml, text/xml, */*'
-  },
-  customFields: {
-    item: ['description', 'content', 'content:encoded', 'summary']
-  }
-});
 
 exports.handler = async (event, context) => {
   const supabase = createClient(
@@ -21,7 +9,6 @@ exports.handler = async (event, context) => {
   try {
     console.log('Fetching active RSS feeds...');
 
-    // Get all active feeds
     const { data: feeds, error: feedError } = await supabase
       .from('rss_feeds')
       .select('*')
@@ -38,21 +25,38 @@ exports.handler = async (event, context) => {
       try {
         console.log(`Fetching feed: ${feed.name}`);
 
-        const rssFeed = await parser.parseURL(feed.url);
+        // Fetch RSS feed with better headers
+        const response = await fetch(feed.url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/rss+xml, application/xml, text/xml, application/atom+xml, */*',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Cache-Control': 'no-cache'
+          }
+        });
+
+        if (!response.ok) {
+          console.error(`Failed to fetch ${feed.name}: ${response.status}`);
+          continue;
+        }
+
+        const xmlText = await response.text();
+        const articles = parseRSSFeed(xmlText);
+
+        console.log(`Found ${articles.length} articles in ${feed.name}`);
+        totalArticlesDiscovered += articles.length;
 
         // Get articles from last 7 days
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-        const recentArticles = rssFeed.items.filter(item => {
-          const pubDate = new Date(item.pubDate || item.isoDate);
+        const recentArticles = articles.filter(article => {
+          const pubDate = new Date(article.pubDate);
           return pubDate > sevenDaysAgo;
         });
 
-        console.log(`Found ${recentArticles.length} recent articles in ${feed.name}`);
-        totalArticlesDiscovered += recentArticles.length;
+        console.log(`${recentArticles.length} recent articles from ${feed.name}`);
 
-        // Process each article
         for (const article of recentArticles) {
           try {
             // Check if article already in queue
@@ -70,20 +74,22 @@ exports.handler = async (event, context) => {
             // Evaluate with AI
             const evaluation = await evaluateArticleRelevance(
               article.title,
-              article.contentSnippet || article.description || '',
+              article.description || '',
               article.link
             );
 
-            // Only queue if relevance score > 0.6
-            if (evaluation.score >= 0.6) {
+            console.log(`Article "${article.title}" scored ${evaluation.score}: ${evaluation.reasoning}`);
+
+            // Queue if relevance score > 0.5
+            if (evaluation.score >= 0.5) {
               const { error: insertError } = await supabase
                 .from('article_queue')
                 .insert([{
                   rss_feed_id: feed.id,
                   title: article.title,
                   url: article.link,
-                  description: article.contentSnippet || article.description,
-                  published_date: article.pubDate || article.isoDate,
+                  description: article.description,
+                  published_date: article.pubDate,
                   ai_relevance_score: evaluation.score,
                   ai_reasoning: evaluation.reasoning,
                   status: 'pending'
@@ -95,8 +101,6 @@ exports.handler = async (event, context) => {
                 console.log(`Queued: ${article.title} (score: ${evaluation.score})`);
                 totalArticlesQueued++;
               }
-            } else {
-              console.log(`Skipped (low score ${evaluation.score}): ${article.title}`);
             }
 
           } catch (articleError) {
@@ -136,6 +140,64 @@ exports.handler = async (event, context) => {
   }
 };
 
+function parseRSSFeed(xmlText) {
+  const articles = [];
+  
+  // Simple regex-based parsing (works for most RSS/Atom feeds)
+  const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/gi;
+  const entryRegex = /<entry[^>]*>([\s\S]*?)<\/entry>/gi;
+  
+  let matches = [...xmlText.matchAll(itemRegex)];
+  if (matches.length === 0) {
+    matches = [...xmlText.matchAll(entryRegex)];
+  }
+  
+  for (const match of matches) {
+    const itemXml = match[1];
+    
+    const title = extractTag(itemXml, 'title');
+    const link = extractTag(itemXml, 'link') || extractAttribute(itemXml, 'link', 'href');
+    const description = extractTag(itemXml, 'description') || extractTag(itemXml, 'summary') || extractTag(itemXml, 'content');
+    const pubDate = extractTag(itemXml, 'pubDate') || extractTag(itemXml, 'published') || extractTag(itemXml, 'updated');
+    
+    if (title && link) {
+      articles.push({
+        title: cleanText(title),
+        link: link.trim(),
+        description: cleanText(description),
+        pubDate: pubDate || new Date().toISOString()
+      });
+    }
+  }
+  
+  return articles;
+}
+
+function extractTag(xml, tagName) {
+  const regex = new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)<\/${tagName}>`, 'i');
+  const match = xml.match(regex);
+  return match ? match[1] : '';
+}
+
+function extractAttribute(xml, tagName, attrName) {
+  const regex = new RegExp(`<${tagName}[^>]*${attrName}=["']([^"']+)["']`, 'i');
+  const match = xml.match(regex);
+  return match ? match[1] : '';
+}
+
+function cleanText(text) {
+  if (!text) return '';
+  return text
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .trim();
+}
+
 async function evaluateArticleRelevance(title, description, url) {
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -149,43 +211,4 @@ async function evaluateArticleRelevance(title, description, url) {
         model: 'claude-sonnet-4-20250514',
         max_tokens: 300,
         messages: [{
-          role: 'user',
-          content: `Evaluate if this article is about positive impact work (humanitarian aid, charity, NGO activities, development projects, social good).
-
-Title: ${title}
-Description: ${description}
-
-Respond ONLY with valid JSON (no markdown):
-{
-  "score": 0.0-1.0,
-  "reasoning": "brief explanation"
-}
-
-Score guidelines:
-- 0.9-1.0: Clearly about positive impact work with specific initiatives
-- 0.7-0.8: Likely relevant, mentions aid/charity/NGO work
-- 0.5-0.6: Possibly relevant, vague or indirect connection
-- 0.0-0.4: Not relevant (policy, crisis news, general announcements)`
-        }]
-      })
-    });
-
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error?.message || 'API failed');
-
-    let text = data.content[0].text
-      .replace(/```json\n?/g, '')
-      .replace(/```\n?/g, '')
-      .trim();
-
-    const result = JSON.parse(text);
-    return {
-      score: result.score || 0,
-      reasoning: result.reasoning || 'No reasoning provided'
-    };
-
-  } catch (error) {
-    console.error('AI evaluation error:', error);
-    return { score: 0, reasoning: 'Evaluation failed' };
-  }
-}
+          role: '
