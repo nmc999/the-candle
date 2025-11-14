@@ -54,6 +54,7 @@ exports.handler = async (event, context) => {
       .update({ 
         status: 'completed',
         result_data: result,
+        story_id: result.storyId || result.darkStoryId || null, // Add story_id
         completed_at: new Date().toISOString()
       })
       .eq('id', job.id);
