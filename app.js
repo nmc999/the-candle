@@ -429,6 +429,9 @@ function renderPasswordModal() {
 }
 
 function renderDashboard() {
+
+    startJobPolling(); // Start auto-polling for jobs
+    
     if (editingStory) {
         return renderEditStory();
     }
@@ -571,7 +574,12 @@ function renderStoryItems(storiesToShow) {
 function renderJobsTab() {
     return `
         <div class="tab-panel">
-            <h2>Processing Jobs</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>Processing Jobs</h2>
+                <button onclick="triggerJobProcessing()" class="btn" style="background: #2196F3;">
+                    ⚡ Process Pending Jobs Now
+                </button>
+            </div>
             <div id="jobs-list">
                 <p style="color: #666;">Loading jobs...</p>
             </div>
@@ -691,6 +699,7 @@ function checkPassword() {
 }
 
 function logout() {
+    stopJobPolling(); // Stop polling when logging out
     isAuthenticated = false;
     currentPage = 'home';
     window.location.href = '/';
@@ -765,8 +774,17 @@ async function processStory() {
         urlInput.value = '';
         notesInput.value = '';
         
-        fetch('/.netlify/functions/process-job', { method: 'POST' })
-            .catch(e => console.log('Background trigger sent'));
+        // Trigger the background function
+try {
+    const triggerResponse = await fetch('/.netlify/functions/process-job', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+    });
+    console.log('Background function triggered:', triggerResponse.status);
+} catch (e) {
+    console.error('Failed to trigger background function:', e);
+}
         
         pollJobStatus(jobId, statusDiv, processBtn);
         
@@ -874,8 +892,16 @@ async function generateDarkStoriesBackground(primaryStoryId, storyTitle, storyUr
                 
                 if (jobError) throw jobError;
                 
-                fetch('/.netlify/functions/process-job', { method: 'POST' })
-                    .catch(e => console.log('Background trigger sent'));
+                try {
+    const triggerResponse = await fetch('/.netlify/functions/process-job', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+    });
+    console.log('Background function triggered:', triggerResponse.status);
+} catch (e) {
+    console.error('Failed to trigger background function:', e);
+}
                 
                 return;
             } catch (error) {
@@ -1523,6 +1549,64 @@ function setupEventListeners() {
             return;
         }
     });
+}
+
+async function triggerJobProcessing() {
+    try {
+        const response = await fetch('/.netlify/functions/process-job', { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+        
+        if (response.ok) {
+            alert('✓ Job processing triggered! Refresh in a few seconds to see updates.');
+            setTimeout(() => loadJobsList(), 3000);
+        } else {
+            alert('Error triggering jobs: ' + response.status);
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+// Auto-trigger job processing every 30 seconds if there are pending jobs
+let jobPollingInterval = null;
+
+function startJobPolling() {
+    // Clear any existing interval
+    if (jobPollingInterval) clearInterval(jobPollingInterval);
+    
+    // Only poll when on dashboard
+    if (currentPage !== 'dashboard' || !isAuthenticated) return;
+    
+    jobPollingInterval = setInterval(async () => {
+        try {
+            const { data: pendingJobs } = await supabase
+                .from('processing_jobs')
+                .select('id')
+                .eq('status', 'pending')
+                .limit(1);
+            
+            if (pendingJobs && pendingJobs.length > 0) {
+                console.log('Found pending jobs, triggering processing...');
+                await fetch('/.netlify/functions/process-job', { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+            }
+        } catch (error) {
+            console.error('Job polling error:', error);
+        }
+    }, 30000); // Every 30 seconds
+}
+
+function stopJobPolling() {
+    if (jobPollingInterval) {
+        clearInterval(jobPollingInterval);
+        jobPollingInterval = null;
+    }
 }
 
 window.addEventListener('DOMContentLoaded', init);
