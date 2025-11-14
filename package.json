@@ -1,12 +1,7 @@
 {
   "name": "the-candle",
   "version": "1.0.0",
-  "description": "Positive news aggregator",
-  "private": true,
-  "scripts": {
-    "build": "echo 'No build step required'"
-  },
   "dependencies": {
-    "@supabase/supabase-js": "^2.39.0"
+    "@supabase/supabase-js": "^2.38.0"
   }
 }
