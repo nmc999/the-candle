@@ -1511,8 +1511,18 @@ function setupEventListeners() {
             } else if (tabName === 'queue') {
                 tabContent.innerHTML = renderQueueTab();
                 loadArticleQueue('pending');
-            }
-    });
+            } else if (tabName === 'jobs') {
+                tabContent.innerHTML = renderJobsTab();
+                loadJobsList();
+            } else if (tabName === 'subscribers') {
+                tabContent.innerHTML = renderSubscribersTab();
+                loadSubscribersList();
+            } else if (tabName === 'analytics') {
+                tabContent.innerHTML = renderAnalyticsTab();
+                setTimeout(() => renderClicksChart(), 100);
+        }
+    }
+});
     
     // Tooltip hover handlers with safety checks
     document.addEventListener('mouseenter', (e) => {
