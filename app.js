@@ -665,66 +665,104 @@ async function processStory() {
     
     processBtn.disabled = true;
     processBtn.textContent = 'Processing...';
-    statusDiv.innerHTML = '<div class="status-message info">🤖 AI is analyzing the story (~15 seconds)...</div>';
     
     try {
-        const response = await fetch('/.netlify/functions/process-story', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url, notes })
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Processing failed');
-        }
-
-        const storyData = await response.json();
-        
-        statusDiv.innerHTML = '<div class="status-message info">✓ Story processed! Saving to database...</div>';
-        
-        // Save to database
-        const { data: insertedData, error: insertError } = await supabase.from('stories').insert([{
-            title: storyData.title,
-            organization: storyData.organization,
-            location: storyData.location,
-            summary: storyData.summary,
-            impact_metrics: storyData.impactMetrics || [],
-            category: storyData.category,
-            source_url: storyData.sourceUrls[0],
-            source_urls: storyData.sourceUrls,
-            related_dark_story_ids: [],
-            utm_campaign: 'positive-impact'
+        // Create a processing job
+        const { data: job, error: jobError } = await supabase.from('processing_jobs').insert([{
+            job_type: 'primary_story',
+            status: 'pending',
+            input_data: { url, notes }
         }]).select();
         
-        if (insertError) throw insertError;
+        if (jobError) throw jobError;
         
-        const newStoryId = insertedData[0].id;
+        const jobId = job[0].id;
         
         statusDiv.innerHTML = `
-            <div class="status-message success">
-                ✓ Success! Added 1 ${storyData.category} story with ${storyData.sourceUrls.length} sources.
-                <div style="margin-top: 15px;">
-                    <button onclick="generateDarkStories(${newStoryId}, '${storyData.title.replace(/'/g, "\\'")}', '${url}')" 
-                            class="btn" style="font-size: 0.9rem; padding: 10px 20px;">
-                        🌑 Generate Context Stories (Optional)
-                    </button>
-                </div>
+            <div class="status-message info">
+                🤖 Processing started! This may take 30-60 seconds...<br>
+                <small>Job ID: ${jobId}</small>
             </div>
         `;
         
         urlInput.value = '';
         notesInput.value = '';
-        await loadStories();
-        await loadAnalytics();
+        
+        // Trigger the background function
+        fetch('/.netlify/functions/process-job', { method: 'POST' })
+            .catch(e => console.log('Background trigger sent'));
+        
+        // Poll for completion
+        pollJobStatus(jobId, statusDiv, processBtn);
         
     } catch (error) {
-        console.error('Processing error:', error);
+        console.error('Error:', error);
         statusDiv.innerHTML = `<div class="status-message error">Error: ${error.message}</div>`;
-    } finally {
         processBtn.disabled = false;
         processBtn.textContent = '🤖 Process with AI';
     }
+}
+
+async function pollJobStatus(jobId, statusDiv, processBtn) {
+    const maxAttempts = 60; // Poll for up to 60 seconds
+    let attempts = 0;
+    
+    const checkStatus = async () => {
+        attempts++;
+        
+        const { data: job, error } = await supabase
+            .from('processing_jobs')
+            .select('*')
+            .eq('id', jobId)
+            .single();
+        
+        if (error) {
+            statusDiv.innerHTML = `<div class="status-message error">Error checking status: ${error.message}</div>`;
+            processBtn.disabled = false;
+            processBtn.textContent = '🤖 Process with AI';
+            return;
+        }
+        
+        if (job.status === 'completed') {
+            statusDiv.innerHTML = `
+                <div class="status-message success">
+                    ✓ Success! Story added: "${job.result_data.story.title}"
+                </div>
+            `;
+            processBtn.disabled = false;
+            processBtn.textContent = '🤖 Process with AI';
+            await loadStories();
+            await loadAnalytics();
+            return;
+        }
+        
+        if (job.status === 'failed') {
+            statusDiv.innerHTML = `<div class="status-message error">Processing failed: ${job.error_message}</div>`;
+            processBtn.disabled = false;
+            processBtn.textContent = '🤖 Process with AI';
+            return;
+        }
+        
+        if (attempts >= maxAttempts) {
+            statusDiv.innerHTML = `
+                <div class="status-message error">
+                    Processing is taking longer than expected. Job ID: ${jobId}<br>
+                    <button onclick="pollJobStatus(${jobId}, document.getElementById('status-message'), document.getElementById('process-btn'))" class="btn" style="margin-top: 10px;">
+                        Check Status Again
+                    </button>
+                </div>
+            `;
+            processBtn.disabled = false;
+            processBtn.textContent = '🤖 Process with AI';
+            return;
+        }
+        
+        // Still processing, check again in 2 seconds
+        setTimeout(checkStatus, 2000);
+    };
+    
+    // Start polling after 5 seconds (give function time to start)
+    setTimeout(checkStatus, 5000);
 }
 
 async function generateDarkStories(primaryStoryId, storyTitle, storyUrl) {
