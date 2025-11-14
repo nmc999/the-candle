@@ -212,7 +212,6 @@ Respond ONLY with valid JSON (no markdown, no backticks):
   
   const darkStory = JSON.parse(text);
 
-  // Save to database
   const supabase = createClient(
     process.env.SUPABASE_URL,
     process.env.SUPABASE_KEY
@@ -232,14 +231,19 @@ Respond ONLY with valid JSON (no markdown, no backticks):
 
   if (error) throw error;
 
+  const darkStoryId = insertedData[0].id;
+
   // Link to primary story
-  await supabase
+  const { error: linkError } = await supabase
     .from('stories')
-    .update({ related_dark_story_ids: [insertedData[0].id] })
+    .update({ related_dark_story_ids: [darkStoryId] })
     .eq('id', primaryStoryId);
+    
+  if (linkError) throw linkError;
 
   return {
-    darkStoryId: insertedData[0].id,
-    darkStory
+    darkStoryId: darkStoryId,
+    primaryStoryId: primaryStoryId,
+    darkStory: darkStory
   };
 }
