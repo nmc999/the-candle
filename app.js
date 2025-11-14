@@ -465,6 +465,8 @@ function renderDashboard() {
             <div class="dashboard-tabs">
                 <button class="tab-btn active" data-tab="add">➕ Add Story</button>
                 <button class="tab-btn" data-tab="manage">📚 Manage Stories</button>
+                <button class="tab-btn" data-tab="rss">📡 RSS Feeds</button>
+                <button class="tab-btn" data-tab="queue">📋 Article Queue</button>
                 <button class="tab-btn" data-tab="jobs">⚙️ Jobs</button>
                 <button class="tab-btn" data-tab="subscribers">📧 Subscribers</button>
                 <button class="tab-btn" data-tab="analytics">📊 Analytics</button>
@@ -1503,8 +1505,13 @@ function setupEventListeners() {
             } else if (tabName === 'analytics') {
                 tabContent.innerHTML = renderAnalyticsTab();
                 setTimeout(() => renderClicksChart(), 100);
+            } else if (tabName === 'rss') {
+                tabContent.innerHTML = renderRSSTab();
+                loadRSSFeeds();
+            } else if (tabName === 'queue') {
+                tabContent.innerHTML = renderQueueTab();
+                loadArticleQueue('pending');
             }
-        }
     });
     
     // Tooltip hover handlers with safety checks
@@ -1793,6 +1800,364 @@ function filterSubscribers(filterType) {
     document.getElementById(`sub-filter-${filterType}`).style.background = '#b8860b';
     
     loadSubscribersList(filterType);
+}
+
+// RSS Feed Management
+function renderRSSTab() {
+    return `
+        <div class="tab-panel">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>RSS Feeds</h2>
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="fetchRSSNow()" class="btn" style="background: #2196F3;">⚡ Fetch Now</button>
+                    <button onclick="showAddFeedForm()" class="btn">➕ Add Feed</button>
+                </div>
+            </div>
+            
+            <div id="add-feed-form" style="display: none; background: #f9f9f9; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h3>Add New RSS Feed</h3>
+                <div class="form-group">
+                    <label>Feed Name</label>
+                    <input type="text" id="feed-name" placeholder="e.g., Red Cross News">
+                </div>
+                <div class="form-group">
+                    <label>RSS Feed URL</label>
+                    <input type="url" id="feed-url" placeholder="https://example.org/feed.xml">
+                </div>
+                <div class="form-group">
+                    <label>Category (Optional)</label>
+                    <input type="text" id="feed-category" placeholder="e.g., healthcare, education">
+                </div>
+                <button onclick="saveFeed()" class="btn">Save Feed</button>
+                <button onclick="hideAddFeedForm()" class="btn" style="background: #6c757d; margin-left: 10px;">Cancel</button>
+                <div id="feed-status" style="margin-top: 10px;"></div>
+            </div>
+            
+            <div id="rss-feeds-list">
+                <p style="color: #666;">Loading feeds...</p>
+            </div>
+        </div>
+    `;
+}
+
+async function loadRSSFeeds() {
+    try {
+        const { data: feeds, error } = await supabase
+            .from('rss_feeds')
+            .select('*')
+            .order('name', { ascending: true });
+        
+        if (error) throw error;
+        
+        const listDiv = document.getElementById('rss-feeds-list');
+        if (feeds.length === 0) {
+            listDiv.innerHTML = '<p style="color: #666;">No RSS feeds yet. Add one to get started!</p>';
+        } else {
+            listDiv.innerHTML = `
+                <div class="story-list">
+                    ${feeds.map(feed => `
+                        <div class="story-item">
+                            <div class="story-item-header">
+                                <h3>${feed.name}</h3>
+                                <span class="badge" style="background: ${feed.is_active ? '#4caf50' : '#999'};">
+                                    ${feed.is_active ? 'Active' : 'Inactive'}
+                                </span>
+                            </div>
+                            <div class="story-item-meta">
+                                <a href="${feed.url}" target="_blank" style="color: #2563eb;">${feed.url}</a>
+                                ${feed.category ? `• Category: ${feed.category}` : ''}
+                                ${feed.last_checked_at ? `• Last checked: ${new Date(feed.last_checked_at).toLocaleString()}` : ''}
+                            </div>
+                            <div class="story-item-actions">
+                                <button onclick="toggleFeedStatus(${feed.id}, ${!feed.is_active})" class="btn-small">
+                                    ${feed.is_active ? 'Deactivate' : 'Activate'}
+                                </button>
+                                <button onclick="deleteFeed(${feed.id})" class="btn-small btn-danger">Delete</button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+    } catch (error) {
+        document.getElementById('rss-feeds-list').innerHTML = 
+            `<p style="color: #ff6b6b;">Error loading feeds: ${error.message}</p>`;
+    }
+}
+
+function showAddFeedForm() {
+    document.getElementById('add-feed-form').style.display = 'block';
+}
+
+function hideAddFeedForm() {
+    document.getElementById('add-feed-form').style.display = 'none';
+    document.getElementById('feed-name').value = '';
+    document.getElementById('feed-url').value = '';
+    document.getElementById('feed-category').value = '';
+    document.getElementById('feed-status').innerHTML = '';
+}
+
+async function saveFeed() {
+    const name = document.getElementById('feed-name').value.trim();
+    const url = document.getElementById('feed-url').value.trim();
+    const category = document.getElementById('feed-category').value.trim();
+    const statusDiv = document.getElementById('feed-status');
+    
+    if (!name || !url) {
+        statusDiv.innerHTML = '<div class="status-message error">Name and URL are required</div>';
+        return;
+    }
+    
+    try {
+        const { error } = await supabase.from('rss_feeds').insert([{
+            name,
+            url,
+            category: category || null,
+            is_active: true
+        }]);
+        
+        if (error) throw error;
+        
+        statusDiv.innerHTML = '<div class="status-message success">✓ Feed added successfully!</div>';
+        setTimeout(() => {
+            hideAddFeedForm();
+            loadRSSFeeds();
+        }, 1500);
+        
+    } catch (error) {
+        statusDiv.innerHTML = `<div class="status-message error">Error: ${error.message}</div>`;
+    }
+}
+
+async function toggleFeedStatus(feedId, newStatus) {
+    try {
+        const { error } = await supabase
+            .from('rss_feeds')
+            .update({ is_active: newStatus })
+            .eq('id', feedId);
+        
+        if (error) throw error;
+        
+        loadRSSFeeds();
+    } catch (error) {
+        alert('Error updating feed: ' + error.message);
+    }
+}
+
+async function deleteFeed(feedId) {
+    if (!confirm('Delete this RSS feed? Articles in queue will remain.')) return;
+    
+    try {
+        const { error } = await supabase
+            .from('rss_feeds')
+            .delete()
+            .eq('id', feedId);
+        
+        if (error) throw error;
+        
+        loadRSSFeeds();
+    } catch (error) {
+        alert('Error deleting feed: ' + error.message);
+    }
+}
+
+async function fetchRSSNow() {
+    if (!confirm('Fetch all RSS feeds now? This will check for new articles.')) return;
+    
+    try {
+        const response = await fetch('/.netlify/functions/fetch-rss', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (!response.ok) throw new Error('Fetch failed');
+        
+        const result = await response.json();
+        alert(`✓ RSS fetch complete!\n\nFeeds processed: ${result.feedsProcessed}\nArticles discovered: ${result.articlesDiscovered}\nArticles queued: ${result.articlesQueued}`);
+        
+    } catch (error) {
+        alert('Error fetching RSS: ' + error.message);
+    }
+}
+
+// Article Queue Management
+function renderQueueTab() {
+    return `
+        <div class="tab-panel">
+            <h2>Article Queue</h2>
+            <p style="color: #666; margin-bottom: 20px;">
+                Review articles discovered from RSS feeds. Approve to process with AI.
+            </p>
+            
+            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <button class="btn-small" onclick="filterQueue('pending')" id="queue-filter-pending" style="background: #b8860b;">Pending</button>
+                <button class="btn-small" onclick="filterQueue('approved')" id="queue-filter-approved">Approved</button>
+                <button class="btn-small" onclick="filterQueue('rejected')" id="queue-filter-rejected">Rejected</button>
+                <button class="btn-small" onclick="filterQueue('all')" id="queue-filter-all">All</button>
+            </div>
+            
+            <div id="article-queue-list">
+                <p style="color: #666;">Loading articles...</p>
+            </div>
+        </div>
+    `;
+}
+
+async function loadArticleQueue(status = 'pending') {
+    try {
+        let query = supabase
+            .from('article_queue')
+            .select('*, rss_feeds(name)')
+            .order('created_at', { ascending: false });
+        
+        if (status !== 'all') {
+            query = query.eq('status', status);
+        }
+        
+        const { data: articles, error } = await query;
+        
+        if (error) throw error;
+        
+        const listDiv = document.getElementById('article-queue-list');
+        if (articles.length === 0) {
+            listDiv.innerHTML = `<p style="color: #666;">No ${status} articles.</p>`;
+        } else {
+            listDiv.innerHTML = `
+                <div class="story-list">
+                    ${articles.map(article => `
+                        <div class="story-item">
+                            <div class="story-item-header">
+                                <h3>${article.title}</h3>
+                                <span class="badge" style="background: ${getStatusColor(article.status)};">
+                                    ${article.status}
+                                </span>
+                            </div>
+                            <div class="story-item-meta">
+                                Source: ${article.rss_feeds?.name || 'Unknown'} • 
+                                Score: ${(article.ai_relevance_score * 100).toFixed(0)}% • 
+                                ${new Date(article.published_date).toLocaleDateString()}
+                            </div>
+                            <p style="color: #666; margin: 10px 0; font-size: 0.9rem;">
+                                ${article.description?.substring(0, 200)}...
+                            </p>
+                            <p style="color: #999; font-size: 0.85rem; font-style: italic; margin: 10px 0;">
+                                AI: ${article.ai_reasoning}
+                            </p>
+                            <div class="story-item-actions">
+                                <a href="${article.url}" target="_blank" class="btn-small" style="background: #2196F3;">View Article</a>
+                                ${article.status === 'pending' ? `
+                                    <button onclick="approveArticle(${article.id}, '${article.url.replace(/'/g, "\\'")}', '${article.title.replace(/'/g, "\\'")}')" class="btn-small" style="background: #4caf50;">✓ Approve & Process</button>
+                                    <button onclick="rejectArticle(${article.id})" class="btn-small btn-danger">✗ Reject</button>
+                                ` : ''}
+                                <button onclick="deleteQueuedArticle(${article.id})" class="btn-small btn-danger">Delete</button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+    } catch (error) {
+        document.getElementById('article-queue-list').innerHTML = 
+            `<p style="color: #ff6b6b;">Error loading queue: ${error.message}</p>`;
+    }
+}
+
+function getStatusColor(status) {
+    const colors = {
+        'pending': '#ffa500',
+        'approved': '#4caf50',
+        'rejected': '#dc3545',
+        'processed': '#2196F3'
+    };
+    return colors[status] || '#999';
+}
+
+function filterQueue(status) {
+    document.querySelectorAll('[id^="queue-filter-"]').forEach(btn => {
+        btn.style.background = '#d4a017';
+    });
+    document.getElementById(`queue-filter-${status}`).style.background = '#b8860b';
+    
+    loadArticleQueue(status);
+}
+
+async function approveArticle(articleId, url, title) {
+    if (!confirm('Approve this article and process it with AI?')) return;
+    
+    try {
+        // Update article status
+        const { error: updateError } = await supabase
+            .from('article_queue')
+            .update({ 
+                status: 'approved',
+                reviewed_at: new Date().toISOString()
+            })
+            .eq('id', articleId);
+        
+        if (updateError) throw updateError;
+        
+        // Create processing job
+        const { data: job, error: jobError } = await supabase.from('processing_jobs').insert([{
+            job_type: 'primary_story',
+            status: 'pending',
+            input_data: { 
+                url: url,
+                notes: `Auto-discovered from RSS: ${title}`
+            }
+        }]).select();
+        
+        if (jobError) throw jobError;
+        
+        // Trigger processing
+        await fetch('/.netlify/functions/process-job', { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+        
+        alert('✓ Article approved and queued for processing!');
+        loadArticleQueue('pending');
+        
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+async function rejectArticle(articleId) {
+    if (!confirm('Reject this article? It will be marked as not relevant.')) return;
+    
+    try {
+        const { error } = await supabase
+            .from('article_queue')
+            .update({ 
+                status: 'rejected',
+                reviewed_at: new Date().toISOString()
+            })
+            .eq('id', articleId);
+        
+        if (error) throw error;
+        
+        loadArticleQueue('pending');
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+async function deleteQueuedArticle(articleId) {
+    if (!confirm('Delete this article from the queue?')) return;
+    
+    try {
+        const { error } = await supabase
+            .from('article_queue')
+            .delete()
+            .eq('id', articleId);
+        
+        if (error) throw error;
+        
+        loadArticleQueue();
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
 }
 
 window.addEventListener('DOMContentLoaded', init);
