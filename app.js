@@ -111,22 +111,31 @@ function generateUTMLink(url, storyTitle) {
 
 // Track click
 async function trackClick(storyId, url) {
+    console.log('Tracking click for story:', storyId, 'URL:', url);
+    
     try {
-        await fetch('/.netlify/functions/track-click', {
+        const response = await fetch('/.netlify/functions/track-click', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 storyId,
-                referrer: document.referrer,
+                referrer: document.referrer || 'direct',
                 utmSource: 'the-candle',
                 utmMedium: 'referral',
                 utmCampaign: 'positive-impact'
             })
         });
+        
+        if (!response.ok) {
+            console.error('Track click failed:', response.status);
+        } else {
+            console.log('Click tracked successfully');
+        }
     } catch (error) {
         console.error('Error tracking click:', error);
     }
     
+    // Open link regardless of tracking success
     window.open(url, '_blank');
 }
 
