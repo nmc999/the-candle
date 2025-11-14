@@ -17,6 +17,8 @@ let analytics = {
     subscriberCount: 0,
     storyCounts: { flame: 0, light: 0, dark: 0 }
 };
+let currentFilter = 'all';
+let currentSearchTerm = '';
 
 // Initialize app
 async function init() {
@@ -31,7 +33,6 @@ async function init() {
 
 // Check URL route
 function checkRoute() {
-    // Check if we're in dashboard mode (dashboard.html)
     if (window.DASHBOARD_MODE === true) {
         currentPage = 'dashboard';
         return;
@@ -68,7 +69,6 @@ async function loadStories() {
 // Load analytics data
 async function loadAnalytics() {
     try {
-        // Get subscriber count
         const { count: subCount } = await supabase
             .from('email_subscribers')
             .select('*', { count: 'exact', head: true })
@@ -76,14 +76,12 @@ async function loadAnalytics() {
         
         analytics.subscriberCount = subCount || 0;
 
-        // Get story counts
         analytics.storyCounts = {
             flame: stories.flame.length,
             light: stories.light.length,
             dark: stories.dark.length
         };
 
-        // Get total clicks
         const { data: clickData } = await supabase
             .from('stories')
             .select('click_count');
@@ -135,7 +133,6 @@ async function trackClick(storyId, url) {
         console.error('Error tracking click:', error);
     }
     
-    // Open link regardless of tracking success
     window.open(url, '_blank');
 }
 
@@ -253,7 +250,6 @@ function renderSectionPage(section) {
     let sectionStories = [];
     if (section === 'flame' || section === 'light') {
         sectionStories = [...(stories.flame || []), ...(stories.light || [])];
-        // Sort by date, newest first
         sectionStories.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     } else {
         sectionStories = stories[section] || [];
@@ -305,7 +301,7 @@ function renderStoryCard(story, section) {
                 ${sourceUrls.map((url, idx) => {
                     const utmLink = generateUTMLink(url, story.title);
                     return `<div style="margin-bottom: 8px;">
-                        <a href="#" onclick="trackClick(${story.id}, '${utmLink}'); return false;" class="source-link">
+                        <a href="#" class="source-link" data-story-id="${story.id}" data-utm-link="${utmLink.replace(/"/g, '&quot;')}">
                             Source ${idx + 1} →
                         </a>
                     </div>`;
@@ -462,12 +458,12 @@ function renderDashboard() {
             </div>
             
             <div class="dashboard-tabs">
-    <button class="tab-btn active" data-tab="add">➕ Add Story</button>
-    <button class="tab-btn" data-tab="manage">📚 Manage Stories</button>
-    <button class="tab-btn" data-tab="jobs">⚙️ Jobs</button>
-    <button class="tab-btn" data-tab="subscribers">📧 Subscribers</button>
-    <button class="tab-btn" data-tab="analytics">📊 Analytics</button>
-</div>
+                <button class="tab-btn active" data-tab="add">➕ Add Story</button>
+                <button class="tab-btn" data-tab="manage">📚 Manage Stories</button>
+                <button class="tab-btn" data-tab="jobs">⚙️ Jobs</button>
+                <button class="tab-btn" data-tab="subscribers">📧 Subscribers</button>
+                <button class="tab-btn" data-tab="analytics">📊 Analytics</button>
+            </div>
             
             <div id="tab-content">
                 ${renderAddStoryTab()}
@@ -499,16 +495,14 @@ function renderManageStoriesTab() {
         <div class="tab-panel">
             <h2>All Stories (${allStories.length})</h2>
             
-            <!-- Filter buttons -->
             <div style="margin-bottom: 20px; display: flex; gap: 10px;">
-                <button class="btn-small" onclick="filterStories('all')" id="filter-all">All</button>
+                <button class="btn-small" onclick="filterStories('all')" id="filter-all" style="background: #b8860b;">All</button>
                 <button class="btn-small" onclick="filterStories('light')" id="filter-light">Light</button>
                 <button class="btn-small" onclick="filterStories('dark')" id="filter-dark">Dark</button>
                 <button class="btn-small" onclick="filterStories('with-context')" id="filter-context">Has Context</button>
                 <button class="btn-small" onclick="filterStories('no-context')" id="filter-no-context">Needs Context</button>
             </div>
             
-            <!-- Search box -->
             <div style="margin-bottom: 20px;">
                 <input 
                     type="text" 
@@ -531,7 +525,17 @@ function renderStoryItems(storiesToShow) {
         return '<p style="color: #666; text-align: center; padding: 40px;">No stories match your filter.</p>';
     }
     
-    return storiesToShow.map(story => {
+    const bulkActionsHtml = `
+        <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: none;" id="bulk-actions">
+            <strong id="selected-count">0 selected</strong> •
+            <button onclick="bulkDelete()" class="btn-small btn-danger" style="margin-left: 10px;">Delete Selected</button>
+            <button onclick="bulkChangeCategory('light')" class="btn-small" style="margin-left: 10px;">Set to Light</button>
+            <button onclick="bulkChangeCategory('dark')" class="btn-small" style="margin-left: 10px;">Set to Dark</button>
+            <button onclick="clearSelection()" class="btn-small" style="background: #6c757d; margin-left: 10px;">Clear Selection</button>
+        </div>
+    `;
+    
+    return bulkActionsHtml + storiesToShow.map(story => {
         const hasContext = story.related_dark_story_ids && story.related_dark_story_ids.length > 0;
         const statusBadge = hasContext 
             ? '<span style="background: #4caf50; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; margin-left: 10px;">✓ Context</span>'
@@ -540,23 +544,37 @@ function renderStoryItems(storiesToShow) {
         return `
             <div class="story-item" data-story-id="${story.id}" data-category="${story.category}" data-has-context="${hasContext}">
                 <div class="story-item-header">
-                    <h3>${story.title}${statusBadge}</h3>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <input type="checkbox" class="story-checkbox" data-story-id="${story.id}" onchange="updateBulkActions()" style="width: 20px; height: 20px; cursor: pointer;">
+                        <h3>${story.title}${statusBadge}</h3>
+                    </div>
                     <span class="badge badge-${story.category}">${story.category}</span>
                 </div>
                 <div class="story-item-meta">
                     ${story.organization} • ${story.location} • ${story.click_count || 0} clicks • ${new Date(story.created_at).toLocaleDateString()}
                 </div>
                 <div class="story-item-actions">
-    <button class="btn-small btn-preview" data-story-id="${story.id}" style="background: #2196F3;">Preview</button>
-    <button class="btn-small btn-edit" data-story-id="${story.id}">Edit</button>
-    ${!hasContext && story.category !== 'dark' ? 
-        `<button class="btn-small btn-add-context" data-story-id="${story.id}" data-story-title="${story.title.replace(/"/g, '&quot;')}" data-story-url="${story.source_url}" style="background: #555;">Add Context</button>` 
-        : ''}
-    <button class="btn-small btn-delete" data-story-id="${story.id}" style="background: #dc3545;">Delete</button>
-</div>
+                    <button class="btn-small btn-preview" data-story-id="${story.id}" style="background: #2196F3;">Preview</button>
+                    <button class="btn-small btn-edit" data-story-id="${story.id}">Edit</button>
+                    ${!hasContext && story.category !== 'dark' ? 
+                        `<button class="btn-small btn-add-context" data-story-id="${story.id}" data-story-title="${story.title.replace(/"/g, '&quot;')}" data-story-url="${story.source_url}" style="background: #555;">Add Context</button>` 
+                        : ''}
+                    <button class="btn-small btn-delete" data-story-id="${story.id}" style="background: #dc3545;">Delete</button>
+                </div>
             </div>
         `;
     }).join('');
+}
+
+function renderJobsTab() {
+    return `
+        <div class="tab-panel">
+            <h2>Processing Jobs</h2>
+            <div id="jobs-list">
+                <p style="color: #666;">Loading jobs...</p>
+            </div>
+        </div>
+    `;
 }
 
 function renderSubscribersTab() {
@@ -725,7 +743,6 @@ async function processStory() {
     processBtn.textContent = 'Processing...';
     
     try {
-        // Create a processing job
         const { data: job, error: jobError } = await supabase.from('processing_jobs').insert([{
             job_type: 'primary_story',
             status: 'pending',
@@ -746,11 +763,9 @@ async function processStory() {
         urlInput.value = '';
         notesInput.value = '';
         
-        // Trigger the background function
         fetch('/.netlify/functions/process-job', { method: 'POST' })
             .catch(e => console.log('Background trigger sent'));
         
-        // Poll for completion
         pollJobStatus(jobId, statusDiv, processBtn);
         
     } catch (error) {
@@ -762,7 +777,7 @@ async function processStory() {
 }
 
 async function pollJobStatus(jobId, statusDiv, processBtn) {
-    const maxAttempts = 60; // Poll for up to 60 seconds
+    const maxAttempts = 60;
     let attempts = 0;
     
     const checkStatus = async () => {
@@ -825,11 +840,9 @@ async function pollJobStatus(jobId, statusDiv, processBtn) {
             return;
         }
         
-        // Still processing, check again in 2 seconds
         setTimeout(checkStatus, 2000);
     };
     
-    // Start polling after 5 seconds (give function time to start)
     setTimeout(checkStatus, 5000);
 }
 
@@ -839,7 +852,6 @@ async function generateDarkStoriesBackground(primaryStoryId, storyTitle, storyUr
     statusDiv.innerHTML = '<div class="status-message info">🌑 Starting context story generation...</div>';
     
     try {
-        // Create a processing job for dark story
         const { data: job, error: jobError } = await supabase.from('processing_jobs').insert([{
             job_type: 'dark_story',
             status: 'pending',
@@ -861,11 +873,9 @@ async function generateDarkStoriesBackground(primaryStoryId, storyTitle, storyUr
             </div>
         `;
         
-        // Trigger the background function
         fetch('/.netlify/functions/process-job', { method: 'POST' })
             .catch(e => console.log('Background trigger sent'));
         
-        // Poll for completion
         pollDarkJobStatus(jobId, statusDiv);
         
     } catch (error) {
@@ -926,61 +936,12 @@ async function pollDarkJobStatus(jobId, statusDiv) {
     setTimeout(checkStatus, 5000);
 }
 
-async function generateDarkStories(primaryStoryId, storyTitle, storyUrl) {
-    const statusDiv = document.getElementById('status-message');
-    
-    statusDiv.innerHTML = '<div class="status-message info">🌑 Generating context story (~10 seconds)...</div>';
-    
-    try {
-        const response = await fetch('/.netlify/functions/generate-dark-stories', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ storyTitle, storyUrl })
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Generation failed');
-        }
-
-        const result = await response.json();
-        const { darkStory } = result;  // Changed from darkStories to darkStory
-        
-        // Save single dark story
-        const { data, error } = await supabase.from('stories').insert([{
-            title: darkStory.title,
-            organization: 'Context Research',
-            location: 'Global',
-            summary: darkStory.summary,
-            impact_metrics: darkStory.keyFacts,
-            category: 'dark',
-            source_url: darkStory.sourceUrls[0],
-            source_urls: darkStory.sourceUrls,
-            utm_campaign: 'positive-impact'
-        }]).select();
-        
-        if (error) throw error;
-        
-        // Link to primary story
-        const { error: updateError } = await supabase
-            .from('stories')
-            .update({ related_dark_story_ids: [data[0].id] })
-            .eq('id', primaryStoryId);
-        
-        if (updateError) throw updateError;
-        
-        statusDiv.innerHTML = `
-            <div class="status-message success">
-                ✓ Context story added and linked!
-            </div>
-        `;
-        
-        await loadStories();
-        await loadAnalytics();
-        
-    } catch (error) {
-        console.error('Error:', error);
-        statusDiv.innerHTML = `<div class="status-message error">Error: ${error.message}</div>`;
+function editStoryFromDashboard(storyId) {
+    const story = allStories.find(s => s.id === storyId);
+    if (story) {
+        editingStory = story;
+        renderApp();
+        window.scrollTo(0, 0);
     }
 }
 
@@ -1050,165 +1011,10 @@ async function deleteStory(storyId) {
     }
 }
 
-async function loadSubscribersList() {
-    try {
-        const { data, error } = await supabase
-            .from('email_subscribers')
-            .select('*')
-            .eq('is_active', true)
-            .order('subscribed_at', { ascending: false });
-        
-        if (error) throw error;
-        
-        const listDiv = document.getElementById('subscribers-list');
-        if (data.length === 0) {
-            listDiv.innerHTML = '<p style="color: #666;">No subscribers yet.</p>';
-        } else {
-            listDiv.innerHTML = `
-                <div class="subscriber-list">
-                    ${data.map(sub => `
-                        <div class="subscriber-item">
-                            <span>${sub.email}</span>
-                            <span style="color: #999; font-size: 0.9rem;">
-                                ${new Date(sub.subscribed_at).toLocaleDateString()}
-                            </span>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
-        }
-    } catch (error) {
-        document.getElementById('subscribers-list').innerHTML = 
-            `<p style="color: #ff6b6b;">Error loading subscribers: ${error.message}</p>`;
-    }
-}
-
-async function exportSubscribers() {
-    try {
-        const { data, error } = await supabase
-            .from('email_subscribers')
-            .select('email, subscribed_at')
-            .eq('is_active', true)
-            .order('subscribed_at', { ascending: false });
-        
-        if (error) throw error;
-        
-        const csv = [
-            'Email,Subscribed At',
-            ...data.map(sub => `${sub.email},${sub.subscribed_at}`)
-        ].join('\n');
-        
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `the-candle-subscribers-${new Date().toISOString().split('T')[0]}.csv`;
-        a.click();
-        window.URL.revokeObjectURL(url);
-        
-    } catch (error) {
-        alert('Error exporting: ' + error.message);
-    }
-}
-
-function setupEventListeners() {
-    document.addEventListener('click', (e) => {
-        if (e.target.dataset.section) {
-            currentPage = e.target.dataset.section;
-            renderApp();
-            window.scrollTo(0, 0);
-        }
-        
-        if (e.target.dataset.action) {
-            currentPage = e.target.dataset.action;
-            renderApp();
-        }
-        
-        if (e.target.classList.contains('tab-btn')) {
-            const tabs = document.querySelectorAll('.tab-btn');
-            tabs.forEach(tab => tab.classList.remove('active'));
-            e.target.classList.add('active');
-            
-            const tabContent = document.getElementById('tab-content');
-            const tabName = e.target.dataset.tab;
-            
-            if (tabName === 'add') {
-            tabContent.innerHTML = renderAddStoryTab();
-        } else if (tabName === 'manage') {
-            tabContent.innerHTML = renderManageStoriesTab();
-        } else if (tabName === 'jobs') {
-            tabContent.innerHTML = renderJobsTab();
-            loadJobsList();
-        } else if (tabName === 'subscribers') {
-            tabContent.innerHTML = renderSubscribersTab();
-            loadSubscribersList();
-        } else if (tabName === 'analytics') {
-            tabContent.innerHTML = renderAnalyticsTab();
-        }
-        }
-    });
-    
-    document.addEventListener('mouseenter', (e) => {
-    const target = e.target.closest('[data-section]');
-    if (target && currentPage === 'home') {
-        const tooltips = {
-            flame: { title: '💡 The Light', desc: 'Stories of positive impact' },
-            light: { title: '💡 The Light', desc: 'Stories of positive impact' },
-            dark: { title: '🌑 The Dark', desc: 'Problems being addressed' },
-            wax: { title: '🕯️ The Wax', desc: 'Support organizations' },
-            wick: { title: '🔥 The Wick', desc: 'About The Candle' }
-        };
-            const tooltip = document.getElementById('tooltip');
-            const info = tooltips[target.dataset.section];
-            if (tooltip && info) {
-                document.getElementById('tooltip-title').textContent = info.title;
-                document.getElementById('tooltip-desc').textContent = info.desc;
-                tooltip.classList.add('active');
-            }
-        }
-    }, true);
-    
-    document.addEventListener('mouseleave', (e) => {
-        if (e.target.closest('[data-section]') && currentPage === 'home') {
-            const tooltip = document.getElementById('tooltip');
-            if (tooltip) tooltip.classList.remove('active');
-        }
-    }, true);
-
-    // Delegate button clicks for story actions
-    document.addEventListener('click', (e) => {
-        if (e.target.classList.contains('btn-preview')) {
-            const storyId = parseInt(e.target.dataset.storyId);
-            previewStory(storyId);
-        }
-        
-        if (e.target.classList.contains('btn-edit')) {
-            const storyId = parseInt(e.target.dataset.storyId);
-            editStoryFromDashboard(storyId);
-        }
-        
-        if (e.target.classList.contains('btn-add-context')) {
-            const storyId = parseInt(e.target.dataset.storyId);
-            const storyTitle = e.target.dataset.storyTitle;
-            const storyUrl = e.target.dataset.storyUrl;
-            generateDarkStoriesBackground(storyId, storyTitle, storyUrl);
-        }
-        
-        if (e.target.classList.contains('btn-delete')) {
-            const storyId = parseInt(e.target.dataset.storyId);
-            deleteStory(storyId);
-        }
-    });
-}
-
 // Search and Filter Functions
-let currentFilter = 'all';
-let currentSearchTerm = '';
-
 function filterStories(filterType) {
     currentFilter = filterType;
     
-    // Update button styles
     document.querySelectorAll('[id^="filter-"]').forEach(btn => {
         btn.style.background = '#d4a017';
     });
@@ -1225,7 +1031,6 @@ function searchStories() {
 function applyFiltersAndSearch() {
     let filtered = [...allStories];
     
-    // Apply category filter
     if (currentFilter === 'light') {
         filtered = filtered.filter(s => s.category === 'light' || s.category === 'flame');
     } else if (currentFilter === 'dark') {
@@ -1236,7 +1041,6 @@ function applyFiltersAndSearch() {
         filtered = filtered.filter(s => (!s.related_dark_story_ids || s.related_dark_story_ids.length === 0) && s.category !== 'dark');
     }
     
-    // Apply search
     if (currentSearchTerm) {
         filtered = filtered.filter(s => 
             s.title.toLowerCase().includes(currentSearchTerm) ||
@@ -1246,7 +1050,6 @@ function applyFiltersAndSearch() {
         );
     }
     
-    // Update display
     document.getElementById('story-list').innerHTML = renderStoryItems(filtered);
 }
 
@@ -1324,17 +1127,6 @@ function closePreview(event) {
 }
 
 // Job Management Functions
-function renderJobsTab() {
-    return `
-        <div class="tab-panel">
-            <h2>Processing Jobs</h2>
-            <div id="jobs-list">
-                <p style="color: #666;">Loading jobs...</p>
-            </div>
-        </div>
-    `;
-}
-
 async function loadJobsList() {
     try {
         const { data: jobs, error } = await supabase
@@ -1448,11 +1240,13 @@ function updateBulkActions() {
     const bulkActionsDiv = document.getElementById('bulk-actions');
     const countSpan = document.getElementById('selected-count');
     
-    if (count > 0) {
-        bulkActionsDiv.style.display = 'block';
-        countSpan.textContent = `${count} selected`;
-    } else {
-        bulkActionsDiv.style.display = 'none';
+    if (bulkActionsDiv && countSpan) {
+        if (count > 0) {
+            bulkActionsDiv.style.display = 'block';
+            countSpan.textContent = `${count} selected`;
+        } else {
+            bulkActionsDiv.style.display = 'none';
+        }
     }
 }
 
@@ -1510,6 +1304,192 @@ async function bulkChangeCategory(newCategory) {
 function clearSelection() {
     document.querySelectorAll('.story-checkbox').forEach(cb => cb.checked = false);
     updateBulkActions();
+}
+
+// Subscriber Management Functions
+async function loadSubscribersList() {
+    try {
+        const { data, error } = await supabase
+            .from('email_subscribers')
+            .select('*')
+            .eq('is_active', true)
+            .order('subscribed_at', { ascending: false });
+        
+        if (error) throw error;
+        
+        const listDiv = document.getElementById('subscribers-list');
+        if (data.length === 0) {
+            listDiv.innerHTML = '<p style="color: #666;">No subscribers yet.</p>';
+        } else {
+            listDiv.innerHTML = `
+                <div class="subscriber-list">
+                    ${data.map(sub => `
+                        <div class="subscriber-item">
+                            <span>${sub.email}</span>
+                            <span style="color: #999; font-size: 0.9rem;">
+                                ${new Date(sub.subscribed_at).toLocaleDateString()}
+                            </span>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+    } catch (error) {
+        document.getElementById('subscribers-list').innerHTML = 
+            `<p style="color: #ff6b6b;">Error loading subscribers: ${error.message}</p>`;
+    }
+}
+
+async function exportSubscribers() {
+    try {
+        const { data, error } = await supabase
+            .from('email_subscribers')
+            .select('email, subscribed_at')
+            .eq('is_active', true)
+            .order('subscribed_at', { ascending: false });
+        
+        if (error) throw error;
+        
+        const csv = [
+            'Email,Subscribed At',
+            ...data.map(sub => `${sub.email},${sub.subscribed_at}`)
+        ].join('\n');
+        
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `the-candle-subscribers-${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+        
+    } catch (error) {
+        alert('Error exporting: ' + error.message);
+    }
+}
+
+// Event Listeners
+function setupEventListeners() {
+    document.addEventListener('click', (e) => {
+        if (e.target.dataset.section) {
+            currentPage = e.target.dataset.section;
+            renderApp();
+            window.scrollTo(0, 0);
+        }
+        
+        if (e.target.dataset.action) {
+            currentPage = e.target.dataset.action;
+            renderApp();
+        }
+        
+        if (e.target.classList.contains('tab-btn')) {
+            const tabs = document.querySelectorAll('.tab-btn');
+            tabs.forEach(tab => tab.classList.remove('active'));
+            e.target.classList.add('active');
+            
+            const tabContent = document.getElementById('tab-content');
+            const tabName = e.target.dataset.tab;
+            
+            if (tabName === 'add') {
+                tabContent.innerHTML = renderAddStoryTab();
+            } else if (tabName === 'manage') {
+                tabContent.innerHTML = renderManageStoriesTab();
+            } else if (tabName === 'jobs') {
+                tabContent.innerHTML = renderJobsTab();
+                loadJobsList();
+            } else if (tabName === 'subscribers') {
+                tabContent.innerHTML = renderSubscribersTab();
+                loadSubscribersList();
+            } else if (tabName === 'analytics') {
+                tabContent.innerHTML = renderAnalyticsTab();
+            }
+        }
+    });
+    
+    // Tooltip hover handlers with safety checks
+    document.addEventListener('mouseenter', (e) => {
+        if (!e.target || typeof e.target.closest !== 'function') return;
+        
+        const target = e.target.closest('[data-section]');
+        if (target && currentPage === 'home') {
+            const tooltips = {
+                flame: { title: '💡 The Light', desc: 'Stories of positive impact' },
+                light: { title: '💡 The Light', desc: 'Stories of positive impact' },
+                dark: { title: '🌑 The Dark', desc: 'Problems being addressed' },
+                wax: { title: '🕯️ The Wax', desc: 'Support organizations' },
+                wick: { title: '🔥 The Wick', desc: 'About The Candle' }
+            };
+            const tooltip = document.getElementById('tooltip');
+            const info = tooltips[target.dataset.section];
+            if (tooltip && info) {
+                document.getElementById('tooltip-title').textContent = info.title;
+                document.getElementById('tooltip-desc').textContent = info.desc;
+                tooltip.classList.add('active');
+            }
+        }
+    }, true);
+    
+    document.addEventListener('mouseleave', (e) => {
+        if (!e.target || typeof e.target.closest !== 'function') return;
+        
+        const target = e.target.closest('[data-section]');
+        if (target && currentPage === 'home') {
+            const tooltip = document.getElementById('tooltip');
+            if (tooltip) tooltip.classList.remove('active');
+        }
+    }, true);
+    
+    // Button action delegation
+    document.body.addEventListener('click', (e) => {
+        const target = e.target;
+        
+        if (target.classList.contains('btn-preview')) {
+            e.preventDefault();
+            e.stopPropagation();
+            const storyId = parseInt(target.getAttribute('data-story-id'));
+            if (storyId) previewStory(storyId);
+            return;
+        }
+        
+        if (target.classList.contains('btn-edit')) {
+            e.preventDefault();
+            e.stopPropagation();
+            const storyId = parseInt(target.getAttribute('data-story-id'));
+            if (storyId) editStoryFromDashboard(storyId);
+            return;
+        }
+        
+        if (target.classList.contains('btn-add-context')) {
+            e.preventDefault();
+            e.stopPropagation();
+            const storyId = parseInt(target.getAttribute('data-story-id'));
+            const storyTitle = target.getAttribute('data-story-title');
+            const storyUrl = target.getAttribute('data-story-url');
+            if (storyId && storyTitle && storyUrl) {
+                generateDarkStoriesBackground(storyId, storyTitle, storyUrl);
+            }
+            return;
+        }
+        
+        if (target.classList.contains('btn-delete')) {
+            e.preventDefault();
+            e.stopPropagation();
+            const storyId = parseInt(target.getAttribute('data-story-id'));
+            if (storyId) deleteStory(storyId);
+            return;
+        }
+        
+        if (target.classList.contains('source-link')) {
+            e.preventDefault();
+            e.stopPropagation();
+            const storyId = parseInt(target.getAttribute('data-story-id'));
+            const utmLink = target.getAttribute('data-utm-link');
+            if (storyId && utmLink) {
+                trackClick(storyId, utmLink);
+            }
+            return;
+        }
+    });
 }
 
 window.addEventListener('DOMContentLoaded', init);
