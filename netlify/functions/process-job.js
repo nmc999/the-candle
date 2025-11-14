@@ -136,7 +136,9 @@ Respond ONLY with valid JSON (no markdown, no backticks):
     source_url: allSourceUrls[0],
     source_urls: allSourceUrls,
     related_dark_story_ids: [],
-    utm_campaign: 'positive-impact'
+    utm_campaign: 'positive-impact',
+    is_draft: inputData.isDraft || false,
+    published_at: inputData.publishAt ? new Date(inputData.publishAt).toISOString() : new Date().toISOString()
   }]).select();
 
   if (error) throw error;
