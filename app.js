@@ -182,7 +182,7 @@ function renderHomePage() {
                     </svg>
                 </div>
                 
-                <div class="flame-zone" data-section="flame" style="pointer-events: auto; width: 120px; height: 100px;">
+                <div class="flame-zone" data-section="light" style="pointer-events: auto; width: 120px; height: 100px;">
                     <svg width="120" height="100" viewBox="0 0 120 100" class="flame" style="pointer-events: none;">
                         <ellipse cx="60" cy="50" rx="35" ry="50" fill="#ff6b35" opacity="0.9"/>
                         <ellipse cx="60" cy="55" rx="22" ry="35" fill="#ffa500"/>
@@ -1096,15 +1096,15 @@ function setupEventListeners() {
     });
     
     document.addEventListener('mouseenter', (e) => {
-        const target = e.target.closest('[data-section]');
-        if (target && currentPage === 'home') {
-            const tooltips = {
-                flame: { title: '🔥 The Flame', desc: 'Most exciting stories' },
-                light: { title: '💡 The Light', desc: 'Wider impact reports' },
-                dark: { title: '🌑 The Dark', desc: 'Problems being addressed' },
-                wax: { title: '🕯️ The Wax', desc: 'Support organizations' },
-                wick: { title: '🔥 The Wick', desc: 'About The Candle' }
-            };
+    const target = e.target.closest('[data-section]');
+    if (target && currentPage === 'home') {
+        const tooltips = {
+            flame: { title: '💡 The Light', desc: 'Stories of positive impact' },
+            light: { title: '💡 The Light', desc: 'Stories of positive impact' },
+            dark: { title: '🌑 The Dark', desc: 'Problems being addressed' },
+            wax: { title: '🕯️ The Wax', desc: 'Support organizations' },
+            wick: { title: '🔥 The Wick', desc: 'About The Candle' }
+        };
             const tooltip = document.getElementById('tooltip');
             const info = tooltips[target.dataset.section];
             if (tooltip && info) {
