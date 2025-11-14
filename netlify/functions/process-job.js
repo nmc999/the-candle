@@ -1,16 +1,12 @@
 const { createClient } = require('@supabase/supabase-js');
 
 exports.handler = async (event, context) => {
-  // This function will be called by Netlify's background functions feature
-  // Or we can trigger it manually/via webhook
-  
   const supabase = createClient(
     process.env.SUPABASE_URL,
-    process.env.SUPABASE_KEY
+    process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY
   );
 
   try {
-    // Get oldest pending job
     const { data: jobs, error: fetchError } = await supabase
       .from('processing_jobs')
       .select('*')
@@ -29,7 +25,6 @@ exports.handler = async (event, context) => {
     const job = jobs[0];
     console.log('Processing job:', job.id);
 
-    // Update status to processing
     await supabase
       .from('processing_jobs')
       .update({ 
@@ -48,13 +43,12 @@ exports.handler = async (event, context) => {
       throw new Error('Unknown job type');
     }
 
-    // Mark job as completed
     await supabase
       .from('processing_jobs')
       .update({ 
         status: 'completed',
         result_data: result,
-        story_id: result.storyId || result.darkStoryId || null, // Add story_id
+        story_id: result.storyId || result.darkStoryId || null,
         completed_at: new Date().toISOString()
       })
       .eq('id', job.id);
@@ -69,18 +63,6 @@ exports.handler = async (event, context) => {
   } catch (error) {
     console.error('Job processing error:', error);
     
-    // Mark job as failed if we have a job context
-    if (event.job) {
-      await supabase
-        .from('processing_jobs')
-        .update({ 
-          status: 'failed',
-          error_message: error.message,
-          completed_at: new Date().toISOString()
-        })
-        .eq('id', event.job.id);
-    }
-
     return {
       statusCode: 500,
       body: JSON.stringify({ error: error.message })
@@ -123,7 +105,7 @@ Respond ONLY with valid JSON (no markdown, no backticks):
   "impactMetrics": ["Metric 1", "Metric 2", "Metric 3"],
   "category": "light",
   "additionalSourceUrls": ["https://source1.com", "https://source2.com"]
-}
+}`
       }]
     })
   });
@@ -139,10 +121,9 @@ Respond ONLY with valid JSON (no markdown, no backticks):
   const storyData = JSON.parse(text);
   const allSourceUrls = [url, ...(storyData.additionalSourceUrls || [])];
 
-  // Save to database
   const supabase = createClient(
     process.env.SUPABASE_URL,
-    process.env.SUPABASE_KEY
+    process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY
   );
 
   const { data: insertedData, error } = await supabase.from('stories').insert([{
@@ -151,7 +132,7 @@ Respond ONLY with valid JSON (no markdown, no backticks):
     location: storyData.location,
     summary: storyData.summary,
     impact_metrics: storyData.impactMetrics || [],
-    category: storyData.category,
+    category: storyData.category || 'light',
     source_url: allSourceUrls[0],
     source_urls: allSourceUrls,
     related_dark_story_ids: [],
@@ -214,7 +195,7 @@ Respond ONLY with valid JSON (no markdown, no backticks):
 
   const supabase = createClient(
     process.env.SUPABASE_URL,
-    process.env.SUPABASE_KEY
+    process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY
   );
 
   const { data: insertedData, error } = await supabase.from('stories').insert([{
@@ -233,7 +214,6 @@ Respond ONLY with valid JSON (no markdown, no backticks):
 
   const darkStoryId = insertedData[0].id;
 
-  // Link to primary story
   const { error: linkError } = await supabase
     .from('stories')
     .update({ related_dark_story_ids: [darkStoryId] })
