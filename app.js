@@ -61,6 +61,8 @@ async function loadStories() {
                 stories[story.category].push(story);
             }
         });
+        
+        console.log('Loaded stories:', allStories.length); // Debug log
     } catch (error) {
         console.error('Error loading stories:', error);
     }
