@@ -453,11 +453,12 @@ function renderDashboard() {
             </div>
             
             <div class="dashboard-tabs">
-                <button class="tab-btn active" data-tab="add">➕ Add Story</button>
-                <button class="tab-btn" data-tab="manage">📚 Manage Stories</button>
-                <button class="tab-btn" data-tab="subscribers">📧 Subscribers</button>
-                <button class="tab-btn" data-tab="analytics">📊 Analytics</button>
-            </div>
+    <button class="tab-btn active" data-tab="add">➕ Add Story</button>
+    <button class="tab-btn" data-tab="manage">📚 Manage Stories</button>
+    <button class="tab-btn" data-tab="jobs">⚙️ Jobs</button>
+    <button class="tab-btn" data-tab="subscribers">📧 Subscribers</button>
+    <button class="tab-btn" data-tab="analytics">📊 Analytics</button>
+</div>
             
             <div id="tab-content">
                 ${renderAddStoryTab()}
@@ -487,26 +488,66 @@ function renderAddStoryTab() {
 function renderManageStoriesTab() {
     return `
         <div class="tab-panel">
-            <h2>All Stories</h2>
-            <div class="story-list">
-                ${allStories.map(story => `
-                    <div class="story-item">
-                        <div class="story-item-header">
-                            <h3>${story.title}</h3>
-                            <span class="badge badge-${story.category}">${story.category}</span>
-                        </div>
-                        <div class="story-item-meta">
-                            ${story.organization} • ${story.location} • ${story.click_count || 0} clicks
-                        </div>
-                        <div class="story-item-actions">
-                            <button onclick="editStoryFromDashboard(${story.id})" class="btn-small">Edit</button>
-                            <button onclick="deleteStory(${story.id})" class="btn-small btn-danger">Delete</button>
-                        </div>
-                    </div>
-                `).join('')}
+            <h2>All Stories (${allStories.length})</h2>
+            
+            <!-- Filter buttons -->
+            <div style="margin-bottom: 20px; display: flex; gap: 10px;">
+                <button class="btn-small" onclick="filterStories('all')" id="filter-all">All</button>
+                <button class="btn-small" onclick="filterStories('light')" id="filter-light">Light</button>
+                <button class="btn-small" onclick="filterStories('dark')" id="filter-dark">Dark</button>
+                <button class="btn-small" onclick="filterStories('with-context')" id="filter-context">Has Context</button>
+                <button class="btn-small" onclick="filterStories('no-context')" id="filter-no-context">Needs Context</button>
+            </div>
+            
+            <!-- Search box -->
+            <div style="margin-bottom: 20px;">
+                <input 
+                    type="text" 
+                    id="story-search" 
+                    placeholder="Search stories by title, organization, or location..." 
+                    style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px;"
+                    oninput="searchStories()"
+                />
+            </div>
+            
+            <div class="story-list" id="story-list">
+                ${renderStoryItems(allStories)}
             </div>
         </div>
     `;
+}
+
+function renderStoryItems(storiesToShow) {
+    if (storiesToShow.length === 0) {
+        return '<p style="color: #666; text-align: center; padding: 40px;">No stories match your filter.</p>';
+    }
+    
+    return storiesToShow.map(story => {
+        const hasContext = story.related_dark_story_ids && story.related_dark_story_ids.length > 0;
+        const statusBadge = hasContext 
+            ? '<span style="background: #4caf50; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; margin-left: 10px;">✓ Context</span>'
+            : '<span style="background: #ffa500; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; margin-left: 10px;">⚠ No Context</span>';
+        
+        return `
+            <div class="story-item" data-story-id="${story.id}" data-category="${story.category}" data-has-context="${hasContext}">
+                <div class="story-item-header">
+                    <h3>${story.title}${statusBadge}</h3>
+                    <span class="badge badge-${story.category}">${story.category}</span>
+                </div>
+                <div class="story-item-meta">
+                    ${story.organization} • ${story.location} • ${story.click_count || 0} clicks • ${new Date(story.created_at).toLocaleDateString()}
+                </div>
+                <div class="story-item-actions">
+                    <button onclick="previewStory(${story.id})" class="btn-small" style="background: #2196F3;">Preview</button>
+                    <button onclick="editStoryFromDashboard(${story.id})" class="btn-small">Edit</button>
+                    ${!hasContext && story.category !== 'dark' ? 
+                        `<button onclick="generateDarkStoriesBackground(${story.id}, '${story.title.replace(/'/g, "\\'")}', '${story.source_url}')" class="btn-small" style="background: #555;">Add Context</button>` 
+                        : ''}
+                    <button onclick="deleteStory(${story.id})" class="btn-small btn-danger">Delete</button>
+                </div>
+            </div>
+        `;
+    }).join('');
 }
 
 function renderSubscribersTab() {
@@ -1083,15 +1124,18 @@ function setupEventListeners() {
             const tabName = e.target.dataset.tab;
             
             if (tabName === 'add') {
-                tabContent.innerHTML = renderAddStoryTab();
-            } else if (tabName === 'manage') {
-                tabContent.innerHTML = renderManageStoriesTab();
-            } else if (tabName === 'subscribers') {
-                tabContent.innerHTML = renderSubscribersTab();
-                loadSubscribersList();
-            } else if (tabName === 'analytics') {
-                tabContent.innerHTML = renderAnalyticsTab();
-            }
+            tabContent.innerHTML = renderAddStoryTab();
+        } else if (tabName === 'manage') {
+            tabContent.innerHTML = renderManageStoriesTab();
+        } else if (tabName === 'jobs') {
+            tabContent.innerHTML = renderJobsTab();
+            loadJobsList();
+        } else if (tabName === 'subscribers') {
+            tabContent.innerHTML = renderSubscribersTab();
+            loadSubscribersList();
+        } else if (tabName === 'analytics') {
+            tabContent.innerHTML = renderAnalyticsTab();
+        }
         }
     });
     
@@ -1121,6 +1165,317 @@ function setupEventListeners() {
             if (tooltip) tooltip.classList.remove('active');
         }
     }, true);
+}
+
+// Search and Filter Functions
+let currentFilter = 'all';
+let currentSearchTerm = '';
+
+function filterStories(filterType) {
+    currentFilter = filterType;
+    
+    // Update button styles
+    document.querySelectorAll('[id^="filter-"]').forEach(btn => {
+        btn.style.background = '#d4a017';
+    });
+    document.getElementById(`filter-${filterType}`).style.background = '#b8860b';
+    
+    applyFiltersAndSearch();
+}
+
+function searchStories() {
+    currentSearchTerm = document.getElementById('story-search').value.toLowerCase();
+    applyFiltersAndSearch();
+}
+
+function applyFiltersAndSearch() {
+    let filtered = [...allStories];
+    
+    // Apply category filter
+    if (currentFilter === 'light') {
+        filtered = filtered.filter(s => s.category === 'light' || s.category === 'flame');
+    } else if (currentFilter === 'dark') {
+        filtered = filtered.filter(s => s.category === 'dark');
+    } else if (currentFilter === 'with-context') {
+        filtered = filtered.filter(s => s.related_dark_story_ids && s.related_dark_story_ids.length > 0);
+    } else if (currentFilter === 'no-context') {
+        filtered = filtered.filter(s => (!s.related_dark_story_ids || s.related_dark_story_ids.length === 0) && s.category !== 'dark');
+    }
+    
+    // Apply search
+    if (currentSearchTerm) {
+        filtered = filtered.filter(s => 
+            s.title.toLowerCase().includes(currentSearchTerm) ||
+            s.organization.toLowerCase().includes(currentSearchTerm) ||
+            s.location.toLowerCase().includes(currentSearchTerm) ||
+            s.summary.toLowerCase().includes(currentSearchTerm)
+        );
+    }
+    
+    // Update display
+    document.getElementById('story-list').innerHTML = renderStoryItems(filtered);
+}
+
+// Story Preview Functions
+function previewStory(storyId) {
+    const story = allStories.find(s => s.id === storyId);
+    if (!story) return;
+    
+    const relatedDarkIds = story.related_dark_story_ids || [];
+    const relatedDarkStories = relatedDarkIds
+        .map(id => allStories.find(s => s.id === id))
+        .filter(s => s);
+    
+    const sourceUrls = story.source_urls || [story.source_url];
+    
+    const previewHtml = `
+        <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px;" onclick="closePreview(event)">
+            <div style="background: white; border-radius: 10px; max-width: 800px; max-height: 90vh; overflow-y: auto; padding: 40px;" onclick="event.stopPropagation()">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 20px;">
+                    <h2 style="color: #333; margin: 0;">${story.title}</h2>
+                    <button onclick="closePreview()" style="background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Close</button>
+                </div>
+                
+                <div style="color: #666; margin-bottom: 20px;">
+                    <strong>${story.organization}</strong> • ${story.location}
+                </div>
+                
+                <p style="color: #444; line-height: 1.6; margin-bottom: 20px;">${story.summary}</p>
+                
+                <div style="margin-bottom: 20px;">
+                    <h4 style="color: #333; margin-bottom: 10px;">Key Impact Metrics:</h4>
+                    <ul style="margin-left: 20px;">
+                        ${story.impact_metrics.map(metric => `<li style="color: #444; margin-bottom: 5px;">${metric}</li>`).join('')}
+                    </ul>
+                </div>
+                
+                <div style="margin-bottom: 20px;">
+                    <h4 style="color: #333; margin-bottom: 10px;">Sources:</h4>
+                    ${sourceUrls.map((url, idx) => `
+                        <div style="margin-bottom: 8px;">
+                            <a href="${url}" target="_blank" style="color: #2563eb;">Source ${idx + 1} →</a>
+                        </div>
+                    `).join('')}
+                </div>
+                
+                ${relatedDarkStories.length > 0 ? `
+                    <div style="border-top: 2px solid #eee; padding-top: 20px;">
+                        <h4 style="color: #333; margin-bottom: 15px;">Context Stories:</h4>
+                        ${relatedDarkStories.map(darkStory => `
+                            <div style="background: #f9f9f9; padding: 15px; border-radius: 6px; margin-bottom: 10px;">
+                                <strong>${darkStory.title}</strong>
+                                <p style="color: #666; font-size: 0.9rem; margin-top: 5px;">${darkStory.summary.substring(0, 200)}...</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+                
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #eee; color: #999; font-size: 0.85rem;">
+                    <strong>Category:</strong> ${story.category} | 
+                    <strong>Clicks:</strong> ${story.click_count || 0} | 
+                    <strong>Published:</strong> ${new Date(story.created_at).toLocaleString()}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', previewHtml);
+}
+
+function closePreview(event) {
+    if (!event || event.target === event.currentTarget) {
+        const preview = document.querySelector('[style*="position: fixed"]');
+        if (preview) preview.remove();
+    }
+}
+
+// Job Management Functions
+function renderJobsTab() {
+    return `
+        <div class="tab-panel">
+            <h2>Processing Jobs</h2>
+            <div id="jobs-list">
+                <p style="color: #666;">Loading jobs...</p>
+            </div>
+        </div>
+    `;
+}
+
+async function loadJobsList() {
+    try {
+        const { data: jobs, error } = await supabase
+            .from('processing_jobs')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(50);
+        
+        if (error) throw error;
+        
+        const jobsDiv = document.getElementById('jobs-list');
+        if (jobs.length === 0) {
+            jobsDiv.innerHTML = '<p style="color: #666;">No jobs yet.</p>';
+            return;
+        }
+        
+        const statusColors = {
+            pending: '#ffa500',
+            processing: '#2196F3',
+            completed: '#4caf50',
+            failed: '#dc3545'
+        };
+        
+        jobsDiv.innerHTML = `
+            <div class="story-list">
+                ${jobs.map(job => `
+                    <div class="story-item">
+                        <div class="story-item-header">
+                            <h3>${job.job_type === 'primary_story' ? '📝' : '🌑'} ${job.job_type.replace('_', ' ').toUpperCase()}</h3>
+                            <span style="background: ${statusColors[job.status]}; color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem;">
+                                ${job.status.toUpperCase()}
+                            </span>
+                        </div>
+                        <div class="story-item-meta">
+                            Created: ${new Date(job.created_at).toLocaleString()}
+                            ${job.completed_at ? ` | Completed: ${new Date(job.completed_at).toLocaleString()}` : ''}
+                            ${job.error_message ? ` | Error: ${job.error_message}` : ''}
+                        </div>
+                        ${job.status === 'failed' ? `
+                            <div class="story-item-actions">
+                                <button onclick="retryJob(${job.id})" class="btn-small">🔄 Retry</button>
+                                <button onclick="deleteJob(${job.id})" class="btn-small btn-danger">Delete</button>
+                            </div>
+                        ` : ''}
+                        ${job.status === 'completed' && job.story_id ? `
+                            <div class="story-item-actions">
+                                <button onclick="viewStoryFromJob(${job.story_id})" class="btn-small" style="background: #2196F3;">View Story</button>
+                            </div>
+                        ` : ''}
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    } catch (error) {
+        document.getElementById('jobs-list').innerHTML = 
+            `<p style="color: #ff6b6b;">Error loading jobs: ${error.message}</p>`;
+    }
+}
+
+async function retryJob(jobId) {
+    try {
+        const { error } = await supabase
+            .from('processing_jobs')
+            .update({ 
+                status: 'pending',
+                error_message: null,
+                started_at: null,
+                completed_at: null
+            })
+            .eq('id', jobId);
+        
+        if (error) throw error;
+        
+        fetch('/.netlify/functions/process-job', { method: 'POST' })
+            .catch(e => console.log('Background trigger sent'));
+        
+        alert('Job queued for retry!');
+        loadJobsList();
+        
+    } catch (error) {
+        alert('Error retrying job: ' + error.message);
+    }
+}
+
+async function deleteJob(jobId) {
+    if (!confirm('Delete this job?')) return;
+    
+    try {
+        const { error } = await supabase
+            .from('processing_jobs')
+            .delete()
+            .eq('id', jobId);
+        
+        if (error) throw error;
+        
+        loadJobsList();
+    } catch (error) {
+        alert('Error deleting job: ' + error.message);
+    }
+}
+
+function viewStoryFromJob(storyId) {
+    previewStory(storyId);
+}
+
+// Bulk Actions Functions
+function updateBulkActions() {
+    const checkboxes = document.querySelectorAll('.story-checkbox:checked');
+    const count = checkboxes.length;
+    
+    const bulkActionsDiv = document.getElementById('bulk-actions');
+    const countSpan = document.getElementById('selected-count');
+    
+    if (count > 0) {
+        bulkActionsDiv.style.display = 'block';
+        countSpan.textContent = `${count} selected`;
+    } else {
+        bulkActionsDiv.style.display = 'none';
+    }
+}
+
+function getSelectedStoryIds() {
+    const checkboxes = document.querySelectorAll('.story-checkbox:checked');
+    return Array.from(checkboxes).map(cb => parseInt(cb.dataset.storyId));
+}
+
+async function bulkDelete() {
+    const ids = getSelectedStoryIds();
+    if (ids.length === 0) return;
+    
+    if (!confirm(`Delete ${ids.length} stories? This cannot be undone.`)) return;
+    
+    try {
+        const { error } = await supabase
+            .from('stories')
+            .delete()
+            .in('id', ids);
+        
+        if (error) throw error;
+        
+        await loadStories();
+        await loadAnalytics();
+        renderApp();
+        
+    } catch (error) {
+        alert('Error deleting stories: ' + error.message);
+    }
+}
+
+async function bulkChangeCategory(newCategory) {
+    const ids = getSelectedStoryIds();
+    if (ids.length === 0) return;
+    
+    if (!confirm(`Change ${ids.length} stories to ${newCategory}?`)) return;
+    
+    try {
+        const { error } = await supabase
+            .from('stories')
+            .update({ category: newCategory })
+            .in('id', ids);
+        
+        if (error) throw error;
+        
+        await loadStories();
+        await loadAnalytics();
+        renderApp();
+        
+    } catch (error) {
+        alert('Error updating stories: ' + error.message);
+    }
+}
+
+function clearSelection() {
+    document.querySelectorAll('.story-checkbox').forEach(cb => cb.checked = false);
+    updateBulkActions();
 }
 
 window.addEventListener('DOMContentLoaded', init);
