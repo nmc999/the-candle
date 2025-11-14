@@ -112,7 +112,6 @@ Create a story with:
 - 300-word summary focusing on positive impact
 - Organization name and location
 - 3-5 key impact metrics
-- Category: "flame" or "light"
 - 2 additional source URLs
 
 Respond ONLY with valid JSON (no markdown, no backticks):
@@ -122,9 +121,9 @@ Respond ONLY with valid JSON (no markdown, no backticks):
   "location": "Location",
   "summary": "300 words",
   "impactMetrics": ["Metric 1", "Metric 2", "Metric 3"],
-  "category": "flame",
+  "category": "light",
   "additionalSourceUrls": ["https://source1.com", "https://source2.com"]
-}`
+}
       }]
     })
   });
