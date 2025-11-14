@@ -483,7 +483,8 @@ function renderAddStoryTab() {
             <h2>Add New Story</h2>
             <div class="form-group">
                 <label>URL of Positive Initiative</label>
-                <input type="url" id="url-input" placeholder="https://example.com/positive-impact-story">
+                <input type="url" id="url-input" placeholder="https://example.com/positive-impact-story" onblur="checkDuplicate()">
+                <div id="duplicate-warning" style="margin-top: 10px;"></div>
             </div>
             <div class="form-group">
                 <label>Notes (Optional)</label>
@@ -498,7 +499,13 @@ function renderAddStoryTab() {
 function renderManageStoriesTab() {
     return `
         <div class="tab-panel">
-            <h2>All Stories (${allStories.length})</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>All Stories (${allStories.length})</h2>
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="exportStories('json')" class="btn-small" style="background: #2196F3;">📥 Export JSON</button>
+                    <button onclick="exportStories('csv')" class="btn-small" style="background: #4caf50;">📥 Export CSV</button>
+                </div>
+            </div>
             
             <div style="margin-bottom: 20px; display: flex; gap: 10px;">
                 <button class="btn-small" onclick="filterStories('all')" id="filter-all" style="background: #b8860b;">All</button>
@@ -1606,6 +1613,81 @@ function stopJobPolling() {
     if (jobPollingInterval) {
         clearInterval(jobPollingInterval);
         jobPollingInterval = null;
+    }
+}
+
+// Duplicate Detection
+async function checkDuplicate() {
+    const urlInput = document.getElementById('url-input');
+    const warningDiv = document.getElementById('duplicate-warning');
+    const url = urlInput.value.trim();
+    
+    if (!url) {
+        warningDiv.innerHTML = '';
+        return;
+    }
+    
+    try {
+        // Check if this URL already exists
+        const { data: existing, error } = await supabase
+            .from('stories')
+            .select('id, title, category, created_at')
+            .or(`source_url.eq.${url},source_urls.cs.{${url}}`);
+        
+        if (error) throw error;
+        
+        if (existing && existing.length > 0) {
+            const story = existing[0];
+            warningDiv.innerHTML = `
+                <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 12px; border-radius: 6px; color: #856404;">
+                    ⚠️ <strong>Duplicate Found!</strong> This URL was already processed:<br>
+                    <strong>"${story.title}"</strong> (${story.category}, ${new Date(story.created_at).toLocaleDateString()})
+                    <button onclick="previewStory(${story.id})" class="btn-small" style="margin-left: 10px; background: #ffc107;">View Story</button>
+                </div>
+            `;
+        } else {
+            warningDiv.innerHTML = '<div style="color: #28a745;">✓ No duplicate found - URL is unique</div>';
+        }
+    } catch (error) {
+        console.error('Duplicate check error:', error);
+        warningDiv.innerHTML = '';
+    }
+}
+
+// Export Stories
+function exportStories(format) {
+    const timestamp = new Date().toISOString().split('T')[0];
+    
+    if (format === 'json') {
+        const json = JSON.stringify(allStories, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `the-candle-stories-${timestamp}.json`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+    } else if (format === 'csv') {
+        const headers = ['ID', 'Title', 'Organization', 'Location', 'Category', 'Clicks', 'Created', 'Source URL'];
+        const rows = allStories.map(s => [
+            s.id,
+            `"${s.title.replace(/"/g, '""')}"`,
+            `"${s.organization.replace(/"/g, '""')}"`,
+            `"${s.location.replace(/"/g, '""')}"`,
+            s.category,
+            s.click_count || 0,
+            new Date(s.created_at).toISOString(),
+            s.source_url
+        ]);
+        
+        const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `the-candle-stories-${timestamp}.csv`;
+        a.click();
+        window.URL.revokeObjectURL(url);
     }
 }
 
