@@ -538,13 +538,13 @@ function renderStoryItems(storiesToShow) {
                     ${story.organization} • ${story.location} • ${story.click_count || 0} clicks • ${new Date(story.created_at).toLocaleDateString()}
                 </div>
                 <div class="story-item-actions">
-                    <button onclick="previewStory(${story.id})" class="btn-small" style="background: #2196F3;">Preview</button>
-                    <button onclick="editStoryFromDashboard(${story.id})" class="btn-small">Edit</button>
-                    ${!hasContext && story.category !== 'dark' ? 
-                        `<button onclick="generateDarkStoriesBackground(${story.id}, '${story.title.replace(/'/g, "\\'")}', '${story.source_url}')" class="btn-small" style="background: #555;">Add Context</button>` 
-                        : ''}
-                    <button onclick="deleteStory(${story.id})" class="btn-small btn-danger">Delete</button>
-                </div>
+    <button class="btn-small btn-preview" data-story-id="${story.id}" style="background: #2196F3;">Preview</button>
+    <button class="btn-small btn-edit" data-story-id="${story.id}">Edit</button>
+    ${!hasContext && story.category !== 'dark' ? 
+        `<button class="btn-small btn-add-context" data-story-id="${story.id}" data-story-title="${story.title.replace(/"/g, '&quot;')}" data-story-url="${story.source_url}" style="background: #555;">Add Context</button>` 
+        : ''}
+    <button class="btn-small btn-delete" data-story-id="${story.id}" style="background: #dc3545;">Delete</button>
+</div>
             </div>
         `;
     }).join('');
@@ -1165,6 +1165,31 @@ function setupEventListeners() {
             if (tooltip) tooltip.classList.remove('active');
         }
     }, true);
+
+    // Delegate button clicks for story actions
+    document.addEventListener('click', (e) => {
+        if (e.target.classList.contains('btn-preview')) {
+            const storyId = parseInt(e.target.dataset.storyId);
+            previewStory(storyId);
+        }
+        
+        if (e.target.classList.contains('btn-edit')) {
+            const storyId = parseInt(e.target.dataset.storyId);
+            editStoryFromDashboard(storyId);
+        }
+        
+        if (e.target.classList.contains('btn-add-context')) {
+            const storyId = parseInt(e.target.dataset.storyId);
+            const storyTitle = e.target.dataset.storyTitle;
+            const storyUrl = e.target.dataset.storyUrl;
+            generateDarkStoriesBackground(storyId, storyTitle, storyUrl);
+        }
+        
+        if (e.target.classList.contains('btn-delete')) {
+            const storyId = parseInt(e.target.dataset.storyId);
+            deleteStory(storyId);
+        }
+    });
 }
 
 // Search and Filter Functions
