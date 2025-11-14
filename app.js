@@ -223,8 +223,8 @@ function renderHomePage() {
 
 function renderSectionPage(section) {
     const sectionConfig = {
-        flame: { icon: '🔥', title: 'The Flame', description: 'The most exciting and inspirational stories of positive impact' },
-        light: { icon: '💡', title: 'The Light', description: 'Reports on wider impact and solid positive change' },
+        flame: { icon: '💡', title: 'The Light', description: 'Stories of positive impact and meaningful change' },
+        light: { icon: '💡', title: 'The Light', description: 'Stories of positive impact and meaningful change' },
         dark: { icon: '🌑', title: 'The Dark', description: 'Understanding the problems that make positive work necessary' },
         wax: { icon: '🕯️', title: 'The Wax', description: 'Support organizations making a difference' },
         wick: { icon: '🔥', title: 'The Wick', description: 'About The Candle' }
@@ -240,7 +240,15 @@ function renderSectionPage(section) {
         return renderWickPage(config);
     }
     
-    const sectionStories = stories[section] || [];
+    // Combine flame and light stories
+    let sectionStories = [];
+    if (section === 'flame' || section === 'light') {
+        sectionStories = [...(stories.flame || []), ...(stories.light || [])];
+        // Sort by date, newest first
+        sectionStories.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    } else {
+        sectionStories = stories[section] || [];
+    }
     
     return `
         <div class="section-page">
