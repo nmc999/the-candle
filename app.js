@@ -847,7 +847,42 @@ async function pollJobStatus(jobId, statusDiv, processBtn) {
 }
 
 async function generateDarkStoriesBackground(primaryStoryId, storyTitle, storyUrl) {
-    const statusDiv = document.getElementById('status-message');
+    // Find or create a status div
+    let statusDiv = document.getElementById('status-message');
+    
+    // If no status div exists (e.g., we're in Manage Stories tab), create a temporary one
+    if (!statusDiv) {
+        const buttonParent = event.target.closest('.story-item-actions');
+        if (buttonParent) {
+            statusDiv = document.createElement('div');
+            statusDiv.id = 'temp-status';
+            statusDiv.style.marginTop = '10px';
+            buttonParent.insertAdjacentElement('afterend', statusDiv);
+        } else {
+            // Fallback: just use console logging
+            console.log('Starting context story generation...');
+            alert('Context story generation started. Check the Jobs tab to monitor progress.');
+            
+            try {
+                const { data: job, error: jobError } = await supabase.from('processing_jobs').insert([{
+                    job_type: 'dark_story',
+                    status: 'pending',
+                    input_data: { storyTitle, storyUrl, primaryStoryId }
+                }]).select();
+                
+                if (jobError) throw jobError;
+                
+                fetch('/.netlify/functions/process-job', { method: 'POST' })
+                    .catch(e => console.log('Background trigger sent'));
+                
+                return;
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error starting context generation: ' + error.message);
+                return;
+            }
+        }
+    }
     
     statusDiv.innerHTML = '<div class="status-message info">🌑 Starting context story generation...</div>';
     
@@ -855,11 +890,7 @@ async function generateDarkStoriesBackground(primaryStoryId, storyTitle, storyUr
         const { data: job, error: jobError } = await supabase.from('processing_jobs').insert([{
             job_type: 'dark_story',
             status: 'pending',
-            input_data: { 
-                storyTitle, 
-                storyUrl, 
-                primaryStoryId 
-            }
+            input_data: { storyTitle, storyUrl, primaryStoryId }
         }]).select();
         
         if (jobError) throw jobError;
