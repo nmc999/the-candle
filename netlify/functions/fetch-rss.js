@@ -4,7 +4,11 @@ const Parser = require('rss-parser');
 const parser = new Parser({
   timeout: 10000,
   headers: {
-    'User-Agent': 'The-Candle-RSS-Bot/1.0'
+    'User-Agent': 'Mozilla/5.0 (compatible; The-Candle/1.0; +https://thecandle.live)',
+    'Accept': 'application/rss+xml, application/xml, text/xml, */*'
+  },
+  customFields: {
+    item: ['description', 'content', 'content:encoded', 'summary']
   }
 });
 
