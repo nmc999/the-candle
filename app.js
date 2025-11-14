@@ -767,10 +767,19 @@ async function processStory() {
     processBtn.textContent = 'Processing...';
     
     try {
+        const scheduleCheckbox = document.getElementById('schedule-checkbox');
+        const isScheduled = scheduleCheckbox && scheduleCheckbox.checked;
+        const publishDatetime = isScheduled ? document.getElementById('publish-datetime').value : null;
+
         const { data: job, error: jobError } = await supabase.from('processing_jobs').insert([{
-            job_type: 'primary_story',
-            status: 'pending',
-            input_data: { url, notes }
+        job_type: 'primary_story',
+        status: 'pending',
+        input_data: { 
+            url, 
+            notes,
+            isDraft: isScheduled,
+            publishAt: publishDatetime
+        }
         }]).select();
         
         if (jobError) throw jobError;
