@@ -231,9 +231,9 @@ function renderHomePage() {
 
 function renderSectionPage(section) {
     const sectionConfig = {
-        flame: { icon: '💡', title: 'The Light', description: 'Stories of positive impact and meaningful change' },
-        light: { icon: '💡', title: 'The Light', description: 'Stories of positive impact and meaningful change' },
-        dark: { icon: '🌑', title: 'The Dark', description: 'Understanding the problems that make positive work necessary' },
+        flame: { icon: '💡', title: 'The Light', description: 'Stories of positive impact and meaningful change', bgColor: '#FFF9E6', bgGradient: 'linear-gradient(135deg, #FFF9E6 0%, #FFEAA7 100%)' },
+        light: { icon: '💡', title: 'The Light', description: 'Stories of positive impact and meaningful change', bgColor: '#FFF9E6', bgGradient: 'linear-gradient(135deg, #FFF9E6 0%, #FFEAA7 100%)' },
+        dark: { icon: '🌑', title: 'The Dark', description: 'Understanding the problems that make positive work necessary', bgColor: '#2C2C2C', bgGradient: 'linear-gradient(135deg, #2C2C2C 0%, #3D3D3D 100%)' },
         wax: { icon: '🕯️', title: 'The Wax', description: 'Support organizations making a difference' },
         wick: { icon: '🔥', title: 'The Wick', description: 'About The Candle' }
     };
@@ -257,82 +257,368 @@ function renderSectionPage(section) {
         sectionStories = stories[section] || [];
     }
     
+    const isLight = section === 'flame' || section === 'light';
+    
+    // Render tile grid page
     return `
-        <div class="section-page">
-            <div class="section-content">
-                <a class="back-button" data-action="home">← Back to Home</a>
-                <div class="section-header">
-                    <span style="font-size: 2rem;">${config.icon}</span>
-                    <h1>${config.title}</h1>
-                </div>
-                <p class="section-description">${config.description}</p>
-                ${sectionStories.length === 0 ? 
-                    '<div class="story-card"><p>No stories yet. Check back soon!</p></div>' :
-                    sectionStories.map(story => renderStoryCard(story, section)).join('')
+        <style>
+            .tile-grid-page {
+                min-height: 100vh;
+                background: ${config.bgGradient};
+                padding: 40px 20px;
+            }
+            
+            .tile-grid-container {
+                max-width: 1200px;
+                margin: 0 auto;
+            }
+            
+            .tile-back-button {
+                display: inline-block;
+                padding: 12px 24px;
+                background: ${isLight ? 'white' : '#3D3D3D'};
+                color: ${isLight ? '#E17055' : '#E8E8E8'};
+                text-decoration: none;
+                border-radius: 10px;
+                font-weight: 600;
+                margin-bottom: 30px;
+                border: 2px solid ${isLight ? '#FFEAA7' : '#5D5D5D'};
+                cursor: pointer;
+            }
+            
+            .tile-grid {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 20px;
+                margin-top: 20px;
+            }
+            
+            .tile {
+                aspect-ratio: 1;
+                border-radius: 15px;
+                overflow: hidden;
+                cursor: pointer;
+                transition: all 0.3s ease;
+            }
+            
+            .story-tile {
+                background: ${isLight ? 'white' : '#1E1E1E'};
+                padding: 25px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, ${isLight ? '0.15' : '0.5'});
+                border-top: 4px solid ${isLight ? '#FFEAA7' : '#555555'};
+            }
+            
+            .story-tile:hover {
+                transform: translateY(-5px);
+                box-shadow: 0 8px 20px rgba(0, 0, 0, ${isLight ? '0.25' : '0.7'});
+            }
+            
+            .story-tile h3 {
+                font-size: 1.1rem;
+                color: ${isLight ? '#2D3436' : '#E8E8E8'};
+                line-height: 1.3;
+                text-align: center;
+                font-weight: 700;
+                display: -webkit-box;
+                -webkit-line-clamp: 5;
+                -webkit-box-orient: vertical;
+                overflow: hidden;
+            }
+            
+            .candle-tile {
+                background: ${isLight ? 
+                    'linear-gradient(135deg, #FFE8CC 0%, #FFDAB9 50%, #FFCC99 100%)' : 
+                    'linear-gradient(135deg, #4A4A4A 0%, #5D5D5D 50%, #6D6D6D 100%)'};
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, ${isLight ? '0.2' : '0.6'});
+                position: relative;
+                grid-row: span 2;
+            }
+            
+            .candle-tile::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: radial-gradient(circle at 50% 20%, ${isLight ? 
+                    'rgba(255, 200, 100, 0.4)' : 
+                    'rgba(100, 100, 100, 0.3)'} 0%, transparent 60%);
+                animation: candleFlicker 3s ease-in-out infinite;
+            }
+            
+            @keyframes candleFlicker {
+                0%, 100% { opacity: 1; }
+                50% { opacity: ${isLight ? '0.8' : '0.6'}; }
+            }
+            
+            .candle-svg {
+                width: 50%;
+                height: 80%;
+                filter: drop-shadow(0 4px 8px rgba(0, 0, 0, ${isLight ? '0.2' : '0.4'}));
+            }
+            
+            @media (max-width: 900px) {
+                .tile-grid {
+                    grid-template-columns: repeat(2, 1fr);
                 }
+            }
+            
+            @media (max-width: 600px) {
+                .tile-grid {
+                    grid-template-columns: 1fr;
+                }
+            }
+        </style>
+        
+        <div class="tile-grid-page">
+            <div class="tile-grid-container">
+                <a class="tile-back-button" data-action="home">← Back to Home</a>
+                
+                <div class="tile-grid" id="tileGrid">
+                    ${renderTileGrid(sectionStories, section)}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Modal -->
+        <div id="storyModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, ${isLight ? '0.7' : '0.85'}); z-index: 1000; align-items: center; justify-content: center; padding: 20px;">
+            <div style="background: ${isLight ? 'white' : '#2D2D2D'}; border-radius: 20px; max-width: 800px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0, 0, 0, ${isLight ? '0.3' : '0.6'}); position: relative; ${isLight ? '' : 'border: 1px solid #4A4A4A;'}">
+                <button onclick="closeStoryModal()" style="position: absolute; top: 20px; right: 20px; width: 40px; height: 40px; border-radius: 50%; background: ${isLight ? '#F0F0F0' : '#4A4A4A'}; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: ${isLight ? '#2D3436' : '#E8E8E8'}; z-index: 10;">&times;</button>
+                <div id="modalContent"></div>
             </div>
         </div>
     `;
 }
 
-function renderStoryCard(story, section) {
-    const sourceUrls = story.source_urls || [story.source_url];
-    const relatedDarkIds = story.related_dark_story_ids || [];
+function renderTileGrid(sectionStories, section) {
+    const isLight = section === 'flame' || section === 'light';
+    const tiles = [];
     
-    const relatedDarkStories = relatedDarkIds
-        .map(id => allStories.find(s => s.id === id))
-        .filter(s => s);
+    // Create 9 tiles
+    for (let i = 0; i < 9; i++) {
+        if (i === 4) {
+            // Middle position - candle (spans 2 rows)
+            tiles.push(`
+                <div class="tile candle-tile" onclick="window.location.href = window.location.origin">
+                    ${renderCandleSVG(isLight)}
+                </div>
+            `);
+        } else if (i === 7) {
+            // Skip - covered by candle span
+            continue;
+        } else {
+            // Story tile
+            const storyIndex = i > 4 ? i - 1 : i; // Adjust index after candle
+            const story = sectionStories[storyIndex];
+            
+            if (story) {
+                tiles.push(`
+                    <div class="tile story-tile" onclick='openStoryModal(${JSON.stringify(story).replace(/'/g, "&#39;")}, "${section}")'>
+                        <h3>${story.title}</h3>
+                    </div>
+                `);
+            } else {
+                tiles.push(`
+                    <div class="tile story-tile">
+                        <h3 style="color: ${isLight ? '#B2BEC3' : '#6D6D6D'};">More stories coming soon...</h3>
+                    </div>
+                `);
+            }
+        }
+    }
     
-    return `
-        <div class="story-card">
-            <h3>${story.title}</h3>
-            <div class="story-meta">
-                <strong>${story.organization}</strong> • ${story.location}
+    return tiles.join('');
+}
+
+function renderCandleSVG(isLight) {
+    if (isLight) {
+        return `
+            <svg viewBox="0 0 200 600" class="candle-svg" xmlns="http://www.w3.org/2000/svg">
+                <!-- Flame -->
+                <ellipse cx="100" cy="45" rx="15" ry="25" fill="#FFD700" opacity="0.8">
+                    <animate attributeName="ry" values="25;28;25" dur="2s" repeatCount="indefinite"/>
+                </ellipse>
+                <ellipse cx="100" cy="45" rx="10" ry="20" fill="#FFA500">
+                    <animate attributeName="ry" values="20;23;20" dur="2s" repeatCount="indefinite"/>
+                </ellipse>
+                <ellipse cx="100" cy="45" rx="5" ry="15" fill="#FF6347">
+                    <animate attributeName="ry" values="15;18;15" dur="2s" repeatCount="indefinite"/>
+                </ellipse>
+                
+                <!-- Wick -->
+                <line x1="100" y1="70" x2="100" y2="85" stroke="#333" stroke-width="2"/>
+                
+                <!-- Candle body (tall) -->
+                <rect x="70" y="85" width="60" height="480" rx="5" fill="#F4E4C1"/>
+                <rect x="75" y="85" width="50" height="480" rx="3" fill="#FFEAA7"/>
+                
+                <!-- Wax drips -->
+                <path d="M 85 100 Q 83 110 85 120" stroke="#FFE8CC" stroke-width="3" fill="none" opacity="0.7"/>
+                <path d="M 110 200 Q 108 220 110 240" stroke="#FFE8CC" stroke-width="3" fill="none" opacity="0.7"/>
+                <path d="M 85 350 Q 83 370 85 390" stroke="#FFE8CC" stroke-width="3" fill="none" opacity="0.7"/>
+                
+                <!-- Candle base -->
+                <ellipse cx="100" cy="565" rx="35" ry="8" fill="#E0C9A6"/>
+            </svg>
+        `;
+    } else {
+        return `
+            <svg viewBox="0 0 200 600" class="candle-svg" xmlns="http://www.w3.org/2000/svg">
+                <!-- Flame (dimmer) -->
+                <ellipse cx="100" cy="45" rx="15" ry="25" fill="#8B9DC3" opacity="0.7">
+                    <animate attributeName="ry" values="25;28;25" dur="2s" repeatCount="indefinite"/>
+                </ellipse>
+                <ellipse cx="100" cy="45" rx="10" ry="20" fill="#6B7BA3">
+                    <animate attributeName="ry" values="20;23;20" dur="2s" repeatCount="indefinite"/>
+                </ellipse>
+                <ellipse cx="100" cy="45" rx="5" ry="15" fill="#4A5A7A">
+                    <animate attributeName="ry" values="15;18;15" dur="2s" repeatCount="indefinite"/>
+                </ellipse>
+                
+                <!-- Wick -->
+                <line x1="100" y1="70" x2="100" y2="85" stroke="#1A1A1A" stroke-width="2"/>
+                
+                <!-- Candle body (tall, dark) -->
+                <rect x="70" y="85" width="60" height="480" rx="5" fill="#3D3D3D"/>
+                <rect x="75" y="85" width="50" height="480" rx="3" fill="#4A4A4A"/>
+                
+                <!-- Wax drips -->
+                <path d="M 85 100 Q 83 110 85 120" stroke="#555555" stroke-width="3" fill="none" opacity="0.5"/>
+                <path d="M 110 200 Q 108 220 110 240" stroke="#555555" stroke-width="3" fill="none" opacity="0.5"/>
+                
+                <!-- Candle base -->
+                <ellipse cx="100" cy="565" rx="35" ry="8" fill="#2C2C2C"/>
+            </svg>
+        `;
+    }
+}
+
+// Global functions for modal
+window.openStoryModal = function(story, section) {
+    const isLight = section === 'flame' || section === 'light';
+    const modal = document.getElementById('storyModal');
+    const modalContent = document.getElementById('modalContent');
+    
+    // Parse impact metrics
+    let impactMetrics = [];
+    if (story.impact_metrics) {
+        try {
+            impactMetrics = typeof story.impact_metrics === 'string' 
+                ? JSON.parse(story.impact_metrics) 
+                : story.impact_metrics;
+        } catch (e) {
+            impactMetrics = story.impact_metrics;
+        }
+    }
+    
+    modalContent.innerHTML = `
+        <div style="background: ${isLight ? 'linear-gradient(135deg, #FFEAA7 0%, #FFDAB9 100%)' : 'linear-gradient(135deg, #3D3D3D 0%, #4A4A4A 100%)'}; padding: 40px 40px 30px; border-radius: 20px 20px 0 0;">
+            <h2 style="font-size: 2rem; color: ${isLight ? '#2D3436' : '#E8E8E8'}; font-weight: 700; line-height: 1.3; margin-bottom: 15px; padding-right: 40px;">
+                ${story.title || 'Untitled Story'}
+            </h2>
+            <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 15px;">
+                ${story.organization ? `
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 0.95rem; color: ${isLight ? '#636E72' : '#A8A8A8'};">
+                        <span style="font-size: 1.2rem;">🏢</span>
+                        <span>${story.organization}</span>
+                    </div>
+                ` : ''}
+                ${story.location ? `
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 0.95rem; color: ${isLight ? '#636E72' : '#A8A8A8'};">
+                        <span style="font-size: 1.2rem;">📍</span>
+                        <span>${story.location}</span>
+                    </div>
+                ` : ''}
             </div>
-            <p class="story-summary">${story.summary}</p>
+        </div>
+        <div style="padding: 40px;">
+            ${!isLight && story.dark_context ? `
+                <div style="background: #3D3D3D; border-left: 4px solid #6D6D6D; padding: 25px; border-radius: 10px; margin-bottom: 30px;">
+                    <h3 style="font-size: 1.3rem; color: #A8A8A8; margin-bottom: 15px;">🌑 Context & Understanding</h3>
+                    <div style="font-size: 1rem; line-height: 1.7; color: #C8C8C8;">${story.dark_context}</div>
+                </div>
+            ` : ''}
             
-            <div class="impact-metrics">
-                <h4>Key Impact Metrics:</h4>
-                <ul>
-                    ${story.impact_metrics.map(metric => `<li>${metric}</li>`).join('')}
-                </ul>
-            </div>
+            ${story.summary ? `
+                <div style="font-size: 1.1rem; line-height: 1.8; color: ${isLight ? '#2D3436' : '#D8D8D8'}; margin-bottom: 30px;">
+                    ${story.summary}
+                </div>
+            ` : ''}
             
-            <div style="margin-top: 20px;">
-                <h4 style="color: #333; margin-bottom: 10px;">Sources:</h4>
-                ${sourceUrls.map((url, idx) => {
-                    const utmLink = generateUTMLink(url, story.title);
-                    return `<div style="margin-bottom: 8px;">
-                        <a href="#" class="source-link" data-story-id="${story.id}" data-utm-link="${utmLink.replace(/"/g, '&quot;')}">
-                            Source ${idx + 1} →
-                        </a>
-                    </div>`;
-                }).join('')}
-            </div>
-            
-            ${(section === 'flame' || section === 'light') && relatedDarkStories.length > 0 ? `
-                <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #eee;">
-                    <h4 style="color: #333; margin-bottom: 15px;">📖 Understanding the Challenge</h4>
-                    <p style="color: #666; font-size: 0.9rem; margin-bottom: 15px;">
-                        To fully appreciate this initiative, explore the context:
-                    </p>
-                    ${relatedDarkStories.map(darkStory => `
-                        <div style="background: #f9f9f9; padding: 15px; border-radius: 6px; margin-bottom: 10px;">
-                            <a href="#" onclick="navigateToStory('dark', ${darkStory.id}); return false;" 
-                               style="color: #555; text-decoration: none; font-weight: 600; display: block; margin-bottom: 5px;">
-                                ${darkStory.title} →
-                            </a>
-                            <p style="color: #777; font-size: 0.85rem; margin: 0;">
-                                ${darkStory.summary.substring(0, 150)}...
-                            </p>
-                        </div>
-                    `).join('')}
+            ${impactMetrics && impactMetrics.length > 0 ? `
+                <div style="background: ${isLight ? '#FFF9E6' : '#3D3D3D'}; border-left: 4px solid ${isLight ? '#E17055' : '#6D6D6D'}; padding: 25px; border-radius: 10px; margin-bottom: 30px;">
+                    <h3 style="font-size: 1.3rem; color: ${isLight ? '#E17055' : '#A8A8A8'}; margin-bottom: 15px;">📊 ${isLight ? 'Impact Metrics' : 'Key Data Points'}</h3>
+                    <ul style="list-style: none; padding: 0; margin: 0;">
+                        ${impactMetrics.map(metric => `
+                            <li style="padding: 10px 0; border-bottom: 1px solid ${isLight ? '#FFEAA7' : '#4A4A4A'}; font-size: 1rem; color: ${isLight ? '#2D3436' : '#D8D8D8'};">
+                                ${isLight ? '✨' : '⚠️'} ${metric}
+                            </li>
+                        `).join('')}
+                    </ul>
                 </div>
             ` : ''}
         </div>
+        <div style="padding: 0 40px 40px; display: flex; gap: 15px; flex-wrap: wrap;">
+            ${story.source_url || (story.source_urls && story.source_urls.length > 0) ? `
+                <a href="${story.source_url || story.source_urls[0]}" 
+                   target="_blank" 
+                   style="padding: 12px 24px; border-radius: 10px; font-weight: 600; text-decoration: none; background: ${isLight ? '#E17055' : '#6D6D6D'}; color: ${isLight ? 'white' : '#E8E8E8'}; box-shadow: 0 4px 10px rgba(0, 0, 0, ${isLight ? '0.3' : '0.4'});">
+                    📰 Read Original Source
+                </a>
+            ` : ''}
+            <button onclick="closeStoryModal()" style="padding: 12px 24px; border-radius: 10px; font-weight: 600; cursor: pointer; border: ${isLight ? '2px solid #E17055' : '2px solid #6D6D6D'}; background: ${isLight ? 'white' : '#3D3D3D'}; color: ${isLight ? '#E17055' : '#E8E8E8'}; font-size: 1rem;">
+                Close
+            </button>
+        </div>
     `;
-}
+    
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    
+    // Track view
+    if (story.id) {
+        trackStoryClick(story.id);
+    }
+};
 
+window.closeStoryModal = function() {
+    const modal = document.getElementById('storyModal');
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+};
+
+// Close modal on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeStoryModal();
+    }
+});
+
+// Close modal when clicking outside
+document.getElementById('storyModal')?.addEventListener('click', function(e) {
+    if (e.target.id === 'storyModal') {
+        closeStoryModal();
+    }
+});
+
+async function trackStoryClick(storyId) {
+    try {
+        const response = await fetch('/.netlify/functions/track-click', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ storyId })
+        });
+    } catch (error) {
+        console.error('Error tracking click:', error);
+    }
+}
 function renderWaxPage(config) {
     return `
         <div class="section-page">
