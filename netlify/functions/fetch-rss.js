@@ -20,7 +20,10 @@ exports.handler = async (event, context) => {
     let totalArticlesDiscovered = 0;
     let totalArticlesQueued = 0;
 
-    for (const feed of feeds) {
+    // Process only first 2 feeds to avoid timeout
+    const feedsToProcess = feeds.slice(0, 2);
+
+    for (const feed of feedsToProcess) {
       try {
         console.log(`Fetching feed: ${feed.name}`);
 
@@ -45,12 +48,14 @@ exports.handler = async (event, context) => {
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-        const recentArticles = articles.filter(article => {
-          const pubDate = new Date(article.pubDate);
-          return pubDate > sevenDaysAgo;
-        });
+        const recentArticles = articles
+          .filter(article => {
+            const pubDate = new Date(article.pubDate);
+            return pubDate > sevenDaysAgo;
+          })
+          .slice(0, 5); // Only process 5 most recent articles per feed
 
-        console.log(`${recentArticles.length} recent articles from ${feed.name}`);
+        console.log(`Processing ${recentArticles.length} articles from ${feed.name}`);
 
         for (const article of recentArticles) {
           try {
@@ -67,8 +72,7 @@ exports.handler = async (event, context) => {
 
             const evaluation = await evaluateArticleRelevance(
               article.title,
-              article.description || '',
-              article.link
+              article.description || ''
             );
 
             console.log(`"${article.title}" scored ${evaluation.score}`);
@@ -113,7 +117,7 @@ exports.handler = async (event, context) => {
       statusCode: 200,
       body: JSON.stringify({
         success: true,
-        feedsProcessed: feeds.length,
+        feedsProcessed: feedsToProcess.length,
         articlesDiscovered: totalArticlesDiscovered,
         articlesQueued: totalArticlesQueued
       })
@@ -179,10 +183,12 @@ function cleanText(text) {
     .replace(/&gt;/g, '>')
     .replace(/&amp;/g, '&')
     .replace(/&quot;/g, '"')
+    .replace(/&#8216;/g, "'")
+    .replace(/&#8217;/g, "'")
     .trim();
 }
 
-async function evaluateArticleRelevance(title, description, url) {
+async function evaluateArticleRelevance(title, description) {
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -193,19 +199,16 @@ async function evaluateArticleRelevance(title, description, url) {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 300,
+        max_tokens: 200,
         messages: [{
           role: 'user',
-          content: `Is this article about positive impact work (aid, charity, NGO, development)?
+          content: `Rate this article's relevance to positive impact work (charity, NGO, humanitarian aid, social good).
 
 Title: ${title}
 Description: ${description}
 
 Respond ONLY with JSON:
-{
-  "score": 0.0-1.0,
-  "reasoning": "brief explanation"
-}`
+{"score": 0.0-1.0, "reasoning": "brief reason"}`
         }]
       })
     });
