@@ -30,6 +30,8 @@ exports.handler = async (event, context) => {
       })
       .slice(0, 2);
 
+console.log(`Processing feeds: ${feedsToProcess.map(f => f.name).join(', ')}`);
+    
     for (const feed of feedsToProcess) {
       try {
         console.log(`Fetching feed: ${feed.name}`);
