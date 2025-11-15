@@ -21,7 +21,14 @@ exports.handler = async (event, context) => {
     let totalArticlesQueued = 0;
 
     // Process only first 2 feeds to avoid timeout
-    const feedsToProcess = feeds.slice(0, 2);
+    // Process 2 feeds that haven't been checked recently
+    const feedsToProcess = feeds
+      .sort((a, b) => {
+        const aTime = a.last_checked_at ? new Date(a.last_checked_at) : new Date(0);
+        const bTime = b.last_checked_at ? new Date(b.last_checked_at) : new Date(0);
+        return aTime - bTime;
+      })
+      .slice(0, 2);
 
     for (const feed of feedsToProcess) {
       try {
