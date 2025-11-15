@@ -15,7 +15,6 @@ exports.handler = async (event, context) => {
       .eq('is_active', true);
 
     if (feedError) throw feedError;
-
     console.log(`Found ${feeds.length} active feeds`);
 
     let totalArticlesDiscovered = 0;
@@ -25,13 +24,10 @@ exports.handler = async (event, context) => {
       try {
         console.log(`Fetching feed: ${feed.name}`);
 
-        // Fetch RSS feed with better headers
         const response = await fetch(feed.url, {
           headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'application/rss+xml, application/xml, text/xml, application/atom+xml, */*',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Cache-Control': 'no-cache'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'application/rss+xml, application/xml, text/xml, */*'
           }
         });
 
@@ -46,7 +42,6 @@ exports.handler = async (event, context) => {
         console.log(`Found ${articles.length} articles in ${feed.name}`);
         totalArticlesDiscovered += articles.length;
 
-        // Get articles from last 7 days
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
@@ -59,7 +54,6 @@ exports.handler = async (event, context) => {
 
         for (const article of recentArticles) {
           try {
-            // Check if article already in queue
             const { data: existing } = await supabase
               .from('article_queue')
               .select('id')
@@ -67,20 +61,18 @@ exports.handler = async (event, context) => {
               .maybeSingle();
 
             if (existing) {
-              console.log(`Article already in queue: ${article.title}`);
+              console.log(`Already queued: ${article.title}`);
               continue;
             }
 
-            // Evaluate with AI
             const evaluation = await evaluateArticleRelevance(
               article.title,
               article.description || '',
               article.link
             );
 
-            console.log(`Article "${article.title}" scored ${evaluation.score}: ${evaluation.reasoning}`);
+            console.log(`"${article.title}" scored ${evaluation.score}`);
 
-            // Queue if relevance score > 0.5
             if (evaluation.score >= 0.5) {
               const { error: insertError } = await supabase
                 .from('article_queue')
@@ -95,31 +87,27 @@ exports.handler = async (event, context) => {
                   status: 'pending'
                 }]);
 
-              if (insertError) {
-                console.error('Error inserting article:', insertError);
-              } else {
-                console.log(`Queued: ${article.title} (score: ${evaluation.score})`);
+              if (!insertError) {
+                console.log(`Queued: ${article.title}`);
                 totalArticlesQueued++;
               }
             }
-
-          } catch (articleError) {
-            console.error(`Error processing article: ${articleError.message}`);
+          } catch (err) {
+            console.error('Article error:', err.message);
           }
         }
 
-        // Update last checked time
         await supabase
           .from('rss_feeds')
           .update({ last_checked_at: new Date().toISOString() })
           .eq('id', feed.id);
 
-      } catch (feedError) {
-        console.error(`Error fetching feed ${feed.name}:`, feedError.message);
+      } catch (err) {
+        console.error(`Feed error ${feed.name}:`, err.message);
       }
     }
 
-    console.log(`Summary: Discovered ${totalArticlesDiscovered} articles, queued ${totalArticlesQueued} relevant ones`);
+    console.log(`Discovered ${totalArticlesDiscovered}, queued ${totalArticlesQueued}`);
 
     return {
       statusCode: 200,
@@ -132,7 +120,7 @@ exports.handler = async (event, context) => {
     };
 
   } catch (error) {
-    console.error('RSS fetch error:', error);
+    console.error('Error:', error);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: error.message })
@@ -142,8 +130,6 @@ exports.handler = async (event, context) => {
 
 function parseRSSFeed(xmlText) {
   const articles = [];
-  
-  // Simple regex-based parsing (works for most RSS/Atom feeds)
   const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/gi;
   const entryRegex = /<entry[^>]*>([\s\S]*?)<\/entry>/gi;
   
@@ -154,11 +140,10 @@ function parseRSSFeed(xmlText) {
   
   for (const match of matches) {
     const itemXml = match[1];
-    
     const title = extractTag(itemXml, 'title');
     const link = extractTag(itemXml, 'link') || extractAttribute(itemXml, 'link', 'href');
-    const description = extractTag(itemXml, 'description') || extractTag(itemXml, 'summary') || extractTag(itemXml, 'content');
-    const pubDate = extractTag(itemXml, 'pubDate') || extractTag(itemXml, 'published') || extractTag(itemXml, 'updated');
+    const description = extractTag(itemXml, 'description') || extractTag(itemXml, 'summary');
+    const pubDate = extractTag(itemXml, 'pubDate') || extractTag(itemXml, 'published');
     
     if (title && link) {
       articles.push({
@@ -194,7 +179,6 @@ function cleanText(text) {
     .replace(/&gt;/g, '>')
     .replace(/&amp;/g, '&')
     .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
     .trim();
 }
 
@@ -211,4 +195,33 @@ async function evaluateArticleRelevance(title, description, url) {
         model: 'claude-sonnet-4-20250514',
         max_tokens: 300,
         messages: [{
-          role: '
+          role: 'user',
+          content: `Is this article about positive impact work (aid, charity, NGO, development)?
+
+Title: ${title}
+Description: ${description}
+
+Respond ONLY with JSON:
+{
+  "score": 0.0-1.0,
+  "reasoning": "brief explanation"
+}`
+        }]
+      })
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error('API failed');
+
+    let text = data.content[0].text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const result = JSON.parse(text);
+    
+    return {
+      score: result.score || 0,
+      reasoning: result.reasoning || 'No reason'
+    };
+  } catch (error) {
+    console.error('AI error:', error);
+    return { score: 0, reasoning: 'Failed' };
+  }
+}
