@@ -229,6 +229,9 @@ function renderHomePage() {
     `;
 }
 
+window.currentStoryIndex = 0;
+window.rotationInterval = null;
+
 function renderSectionPage(section) {
     const sectionConfig = {
         flame: { icon: '💡', title: 'The Light', description: 'Stories of positive impact and meaningful change', bgColor: '#FFF9E6', bgGradient: 'linear-gradient(135deg, #FFF9E6 0%, #FFEAA7 100%)' },
@@ -258,6 +261,16 @@ function renderSectionPage(section) {
     }
     
     const isLight = section === 'flame' || section === 'light';
+    
+    // Store stories globally for rotation
+    window.currentSectionStories = sectionStories;
+    window.currentSection = section;
+    window.currentStoryIndex = 0;
+    
+    // Set up scroll listener after render
+    setTimeout(() => {
+        setupScrollRotation();
+    }, 100);
     
     // Render tile grid page
     return `
@@ -364,6 +377,14 @@ function renderSectionPage(section) {
                 filter: drop-shadow(0 4px 8px rgba(0, 0, 0, ${isLight ? '0.2' : '0.4'}));
             }
             
+            .scroll-hint {
+                text-align: center;
+                padding: 20px;
+                color: ${isLight ? '#B2BEC3' : '#6D6D6D'};
+                font-size: 0.9rem;
+                font-style: italic;
+            }
+            
             @media (max-width: 900px) {
                 .tile-grid {
                     grid-template-columns: repeat(2, 1fr);
@@ -382,8 +403,10 @@ function renderSectionPage(section) {
                 <a class="tile-back-button" data-action="home">← Back to Home</a>
                 
                 <div class="tile-grid" id="tileGrid">
-                    ${renderTileGrid(sectionStories, section)}
+                    ${renderTileGrid(sectionStories, section, 0)}
                 </div>
+                
+                ${sectionStories.length > 8 ? '<div class="scroll-hint">Scroll to see more stories</div>' : ''}
             </div>
         </div>
         
@@ -396,6 +419,294 @@ function renderSectionPage(section) {
         </div>
     `;
 }
+
+function renderTileGrid(sectionStories, section, startIndex) {
+    const isLight = section === 'flame' || section === 'light';
+    const tiles = [];
+    
+    // Create 9 tiles
+    for (let i = 0; i < 9; i++) {
+        if (i === 4) {
+            // Middle position - candle (spans 2 rows)
+            tiles.push(`
+                <div class="tile candle-tile" onclick="window.location.href = window.location.origin">
+                    ${renderCandleSVG(isLight)}
+                </div>
+            `);
+        } else if (i === 7) {
+            // Skip - covered by candle span
+            continue;
+        } else {
+            // Story tile
+            const storyIndex = i > 4 ? i - 1 : i; // Adjust index after candle
+            const actualIndex = startIndex + storyIndex;
+            const story = sectionStories[actualIndex % sectionStories.length]; // Loop through stories
+            
+            if (story) {
+                tiles.push(`
+                    <div class="tile story-tile" onclick='openStoryModal(${JSON.stringify(story).replace(/'/g, "&#39;")}, "${section}")'>
+                        <h3>${story.title}</h3>
+                    </div>
+                `);
+            } else {
+                tiles.push(`
+                    <div class="tile story-tile">
+                        <h3 style="color: ${isLight ? '#B2BEC3' : '#6D6D6D'};">More stories coming soon...</h3>
+                    </div>
+                `);
+            }
+        }
+    }
+    
+    return tiles.join('');
+}
+
+function setupScrollRotation() {
+    let lastScrollTop = 0;
+    let scrollTimeout;
+    
+    window.addEventListener('scroll', function() {
+        clearTimeout(scrollTimeout);
+        
+        scrollTimeout = setTimeout(function() {
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            
+            // Check if scrolled down significantly
+            if (scrollTop > lastScrollTop + 200) {
+                // Scrolled down - rotate to next stories
+                rotateStories(1);
+                lastScrollTop = scrollTop;
+            } else if (scrollTop < lastScrollTop - 200) {
+                // Scrolled up - rotate to previous stories
+                rotateStories(-1);
+                lastScrollTop = scrollTop;
+            }
+        }, 200); // Debounce scroll events
+    });
+}
+
+function rotateStories(direction) {
+    if (!window.currentSectionStories || window.currentSectionStories.length === 0) return;
+    
+    // Update story index
+    window.currentStoryIndex += direction * 8; // Move by 8 stories (since we show 8 tiles)
+    
+    // Keep index in valid range
+    if (window.currentStoryIndex < 0) {
+        window.currentStoryIndex = 0;
+    }
+    
+    // Re-render the grid
+    const tileGrid = document.getElementById('tileGrid');
+    if (tileGrid) {
+        tileGrid.innerHTML = renderTileGrid(
+            window.currentSectionStories, 
+            window.currentSection, 
+            window.currentStoryIndex
+        );
+    }
+}
+
+function renderCandleSVG(isLight) {
+    if (isLight) {
+        return `
+            <svg viewBox="0 0 200 600" class="candle-svg" xmlns="http://www.w3.org/2000/svg">
+                <!-- Flame -->
+                <ellipse cx="100" cy="45" rx="15" ry="25" fill="#FFD700" opacity="0.8">
+                    <animate attributeName="ry" values="25;28;25" dur="2s" repeatCount="indefinite"/>
+                </ellipse>
+                <ellipse cx="100" cy="45" rx="10" ry="20" fill="#FFA500">
+                    <animate attributeName="ry" values="20;23;20" dur="2s" repeatCount="indefinite"/>
+                </ellipse>
+                <ellipse cx="100" cy="45" rx="5" ry="15" fill="#FF6347">
+                    <animate attributeName="ry" values="15;18;15" dur="2s" repeatCount="indefinite"/>
+                </ellipse>
+                
+                <!-- Wick -->
+                <line x1="100" y1="70" x2="100" y2="85" stroke="#333" stroke-width="2"/>
+                
+                <!-- Candle body (tall) -->
+                <rect x="70" y="85" width="60" height="480" rx="5" fill="#F4E4C1"/>
+                <rect x="75" y="85" width="50" height="480" rx="3" fill="#FFEAA7"/>
+                
+                <!-- Wax drips -->
+                <path d="M 85 100 Q 83 110 85 120" stroke="#FFE8CC" stroke-width="3" fill="none" opacity="0.7"/>
+                <path d="M 110 200 Q 108 220 110 240" stroke="#FFE8CC" stroke-width="3" fill="none" opacity="0.7"/>
+                <path d="M 85 350 Q 83 370 85 390" stroke="#FFE8CC" stroke-width="3" fill="none" opacity="0.7"/>
+                
+                <!-- Candle base -->
+                <ellipse cx="100" cy="565" rx="35" ry="8" fill="#E0C9A6"/>
+            </svg>
+        `;
+    } else {
+        return `
+            <svg viewBox="0 0 200 600" class="candle-svg" xmlns="http://www.w3.org/2000/svg">
+                <!-- Flame (dimmer) -->
+                <ellipse cx="100" cy="45" rx="15" ry="25" fill="#8B9DC3" opacity="0.7">
+                    <animate attributeName="ry" values="25;28;25" dur="2s" repeatCount="indefinite"/>
+                </ellipse>
+                <ellipse cx="100" cy="45" rx="10" ry="20" fill="#6B7BA3">
+                    <animate attributeName="ry" values="20;23;20" dur="2s" repeatCount="indefinite"/>
+                </ellipse>
+                <ellipse cx="100" cy="45" rx="5" ry="15" fill="#4A5A7A">
+                    <animate attributeName="ry" values="15;18;15" dur="2s" repeatCount="indefinite"/>
+                </ellipse>
+                
+                <!-- Wick -->
+                <line x1="100" y1="70" x2="100" y2="85" stroke="#1A1A1A" stroke-width="2"/>
+                
+                <!-- Candle body (tall, dark) -->
+                <rect x="70" y="85" width="60" height="480" rx="5" fill="#3D3D3D"/>
+                <rect x="75" y="85" width="50" height="480" rx="3" fill="#4A4A4A"/>
+                
+                <!-- Wax drips -->
+                <path d="M 85 100 Q 83 110 85 120" stroke="#555555" stroke-width="3" fill="none" opacity="0.5"/>
+                <path d="M 110 200 Q 108 220 110 240" stroke="#555555" stroke-width="3" fill="none" opacity="0.5"/>
+                
+                <!-- Candle base -->
+                <ellipse cx="100" cy="565" rx="35" ry="8" fill="#2C2C2C"/>
+            </svg>
+        `;
+    }
+}
+
+// Global functions for modal
+window.openStoryModal = function(story, section) {
+    const isLight = section === 'flame' || section === 'light';
+    const modal = document.getElementById('storyModal');
+    const modalContent = document.getElementById('modalContent');
+    
+    // Parse impact metrics
+    let impactMetrics = [];
+    if (story.impact_metrics) {
+        try {
+            impactMetrics = typeof story.impact_metrics === 'string' 
+                ? JSON.parse(story.impact_metrics) 
+                : story.impact_metrics;
+        } catch (e) {
+            impactMetrics = story.impact_metrics;
+        }
+    }
+    
+    // Get all source URLs
+    let sourceUrls = [];
+    if (story.source_urls && Array.isArray(story.source_urls)) {
+        sourceUrls = story.source_urls;
+    } else if (story.source_url) {
+        sourceUrls = [story.source_url];
+    }
+    
+    modalContent.innerHTML = `
+        <div style="background: ${isLight ? 'linear-gradient(135deg, #FFEAA7 0%, #FFDAB9 100%)' : 'linear-gradient(135deg, #3D3D3D 0%, #4A4A4A 100%)'}; padding: 40px 40px 30px; border-radius: 20px 20px 0 0;">
+            <h2 style="font-size: 2rem; color: ${isLight ? '#2D3436' : '#E8E8E8'}; font-weight: 700; line-height: 1.3; margin-bottom: 15px; padding-right: 40px;">
+                ${story.title || 'Untitled Story'}
+            </h2>
+            <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 15px;">
+                ${story.organization ? `
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 0.95rem; color: ${isLight ? '#636E72' : '#A8A8A8'};">
+                        <span style="font-size: 1.2rem;">🏢</span>
+                        <span>${story.organization}</span>
+                    </div>
+                ` : ''}
+                ${story.location ? `
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 0.95rem; color: ${isLight ? '#636E72' : '#A8A8A8'};">
+                        <span style="font-size: 1.2rem;">📍</span>
+                        <span>${story.location}</span>
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+        <div style="padding: 40px;">
+            ${!isLight && story.dark_context ? `
+                <div style="background: #3D3D3D; border-left: 4px solid #6D6D6D; padding: 25px; border-radius: 10px; margin-bottom: 30px;">
+                    <h3 style="font-size: 1.3rem; color: #A8A8A8; margin-bottom: 15px;">🌑 Context & Understanding</h3>
+                    <div style="font-size: 1rem; line-height: 1.7; color: #C8C8C8;">${story.dark_context}</div>
+                </div>
+            ` : ''}
+            
+            ${story.summary ? `
+                <div style="font-size: 1.1rem; line-height: 1.8; color: ${isLight ? '#2D3436' : '#D8D8D8'}; margin-bottom: 30px;">
+                    ${story.summary}
+                </div>
+            ` : ''}
+            
+            ${impactMetrics && impactMetrics.length > 0 ? `
+                <div style="background: ${isLight ? '#FFF9E6' : '#3D3D3D'}; border-left: 4px solid ${isLight ? '#E17055' : '#6D6D6D'}; padding: 25px; border-radius: 10px; margin-bottom: 30px;">
+                    <h3 style="font-size: 1.3rem; color: ${isLight ? '#E17055' : '#A8A8A8'}; margin-bottom: 15px;">📊 ${isLight ? 'Impact Metrics' : 'Key Data Points'}</h3>
+                    <ul style="list-style: none; padding: 0; margin: 0;">
+                        ${impactMetrics.map(metric => `
+                            <li style="padding: 10px 0; border-bottom: 1px solid ${isLight ? '#FFEAA7' : '#4A4A4A'}; font-size: 1rem; color: ${isLight ? '#2D3436' : '#D8D8D8'};">
+                                ${isLight ? '✨' : '⚠️'} ${metric}
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+            ` : ''}
+            
+            ${sourceUrls.length > 0 ? `
+                <div style="background: ${isLight ? '#F9F9F9' : '#3A3A3A'}; border-left: 4px solid ${isLight ? '#6C5CE7' : '#6D6D6D'}; padding: 25px; border-radius: 10px; margin-bottom: 30px;">
+                    <h3 style="font-size: 1.3rem; color: ${isLight ? '#6C5CE7' : '#A8A8A8'}; margin-bottom: 15px;">📚 Sources</h3>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        ${sourceUrls.map((url, index) => `
+                            <a href="${url}" 
+                               target="_blank" 
+                               style="color: ${isLight ? '#6C5CE7' : '#9A9AFF'}; text-decoration: none; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
+                                <span>🔗</span>
+                                <span>Source ${index + 1}</span>
+                            </a>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : ''}
+        </div>
+        <div style="padding: 0 40px 40px; display: flex; gap: 15px; flex-wrap: wrap;">
+            <button onclick="closeStoryModal()" style="padding: 12px 24px; border-radius: 10px; font-weight: 600; cursor: pointer; border: ${isLight ? '2px solid #E17055' : '2px solid #6D6D6D'}; background: ${isLight ? '#E17055' : '#6D6D6D'}; color: white; font-size: 1rem;">
+                Close
+            </button>
+        </div>
+    `;
+    
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    
+    // Track view
+    if (story.id) {
+        trackStoryClick(story.id);
+    }
+};
+
+window.closeStoryModal = function() {
+    const modal = document.getElementById('storyModal');
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+};
+
+// Close modal on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeStoryModal();
+    }
+});
+
+// Close modal when clicking outside
+document.getElementById('storyModal')?.addEventListener('click', function(e) {
+    if (e.target.id === 'storyModal') {
+        closeStoryModal();
+    }
+});
+
+async function trackStoryClick(storyId) {
+    try {
+        const response = await fetch('/.netlify/functions/track-click', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ storyId })
+        });
+    } catch (error) {
+        console.error('Error tracking click:', error);
+    }
+}
+
 
 function renderTileGrid(sectionStories, section) {
     const isLight = section === 'flame' || section === 'light';
