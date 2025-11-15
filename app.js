@@ -1760,15 +1760,6 @@ async function exportSubscribers() {
 function setupEventListeners() {
     document.addEventListener('click', (e) => {
         if (e.target.dataset.section) {
-            // NEW: Redirect to new pages for light and dark
-            if (e.target.dataset.section === 'light') {
-                window.location.href = '/light.html';
-                return;
-            }
-            if (e.target.dataset.section === 'dark') {
-                window.location.href = '/dark.html';
-                return;
-            }
             
             // Keep the old behavior for other sections (flame, wax, wick)
             currentPage = e.target.dataset.section;
